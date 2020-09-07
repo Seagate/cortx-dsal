@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  * For any questions about this software or licensing,
- * please email opensource@seagate.com or cortx-questions@seagate.com. 
+ * please email opensource@seagate.com or cortx-questions@seagate.com.
  */
 
 /* This file describes the public API of DSTORE module -- DSAL
@@ -188,4 +188,36 @@ void dstore_io_op_fini(struct dstore_io_op *op);
 
 struct dstore *dstore_get(void);
 
+/** This API based on input decide whether the givevn request is aligned or not
+ * If it is aligned request it will directly write the requested amount of data
+ * to backend. If it is un-aligned then left and right aligned blocks might be
+ * read, modify in to intermediate buffer location. Also rest of the aligned
+ * blocks is being copied to intermediate buffer location to form uniform
+ * aligned write request, and same is issued to the backend.
+ * @paramp[in] obj - An open object.
+ * @paramp[in] offset - An offset from where write needs to be done.
+ * @paramp[in] count - Amount of data to be written
+ * @paramp[in] bs - A minimum block size on which backend operates
+ * @paramp[in] buf - Buffer from which data needs to be written to backend
+ */
+int dstore_io_op_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
+			size_t bs, char *buf);
+
+/** This function based on input decide whether the given request is aligned or
+ * unaligned I/O. In case of aligned I/O it will simply issue a read request as
+ * it is to backend, data directly save in to a requested buffer. In case of
+ * unaligned I/O based on calculation an extra left or right aligned block might
+ * be read in temporary allocated buffer. Required amount of data is extracted
+ * from blocks being read and copied to reqested buffer. For rest of the aligned
+ * blocks in between the left and right un-aligned block, aligned read will be
+ * issued to backend and data is directly save in to requested buffer.
+ * @param[in] obj - An open object.
+ * @param[in] offset - An offset from where read needs to be done.
+ * @param[in] count  - Amount of data to be read.
+ * @param[in] bs - A minimum block size on which backend store operates.
+ * @param[in, out] buf - Buffer for storing the requested data.
+ * @return 0 or -errno.
+ */
+int dstore_io_op_pread(struct dstore_obj *obj, off_t offset, size_t count,
+		       size_t bs, char *buf);
 #endif
