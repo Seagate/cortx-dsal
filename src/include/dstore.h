@@ -139,53 +139,6 @@ typedef void (*dstore_io_op_cb_t)(void *cb_ctx,
 				  struct dstore_io_op *op,
 				  int op_rc);
 
-/** Initialize, submit and return WRITE IO operation.
- * This function creates a new IO operation, submits it
- * for execution and then returns it to the caller.
- * The IO operation created by this call should be finalized
- * using dstore_io_op_fini.
- * @param[in] obj An open object.
- * @param[in] bvec Associated data buffers and offsets to be written.
- * @param[in, opt] cb Callback for notifications. Can be NULL.
- * @param[in, opt] cb_ctx User-provided context for the callback. It can be NULL.
- * @param[out] out A new IO operation created by this function.
- * @return 0 or -errno. Particular error codes depend purely on the
- * underlying backend. The following error codes may be common across
- * most of the known implementations:
- *	- ENOMEM - No free memory available.
- *	- ENOSPC - No free space (partial writes are not allowed here).
- *	- EINVAL - Invalid input arguments.
- */
-int dstore_io_op_write(struct dstore_obj *obj,
-		       struct dstore_io_vec *bvec,
-		       dstore_io_op_cb_t cb,
-		       void *cb_ctx,
-		       struct dstore_io_op **out);
-
-/** Initialize, submit and return READ IO operation.
- * This function creates a new IO operation, submits it
- * for execution and then returns it to the caller.
- * The IO operation created by this call should be finalized
- * using dstore_io_op_fini.
- * @param[in] obj An open object.
- * @param[in] bvec Associated data buffers and offsets to be read out.
- * @param[in, opt] cb Callback for notifications. Can be NULL.
- * @param[in, opt] cb_ctx User-provided context for the callback. Can be NULL.
- * @param[out] out A new IO operation created by this function.
- * @return 0 or -errno.
- */
-int dstore_io_op_read(struct dstore_obj *obj,
-		      struct dstore_io_vec *bvec,
-		      dstore_io_op_cb_t cb,
-		      void *cb_ctx,
-		      struct dstore_io_op **out);
-
-/** Wait until the IO operation is stable. */
-int dstore_io_op_wait(struct dstore_io_op *op);
-
-/** Release the resources associated with an IO operation. */
-void dstore_io_op_fini(struct dstore_io_op *op);
-
 struct dstore *dstore_get(void);
 
 /** This API based on input decide whether the givevn request is aligned or not
