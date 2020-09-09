@@ -361,7 +361,9 @@ out:
 		dstore_io_buf_fini(buf);
 	}
 
-	log_trace("pwrite_aligned: rc=%d", rc);
+	log_trace("pwrite_aligned:(" OBJ_ID_F " <=> %p ) offset = %lu"
+		  "size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, buf_size, rc);
 
 	return rc;
 }
@@ -402,7 +404,9 @@ out:
                 dstore_io_buf_fini(buf);
         }
 
-	log_trace("pread_aligned: rc=%d", rc);
+	log_trace("pread_aligned:(" OBJ_ID_F " <=> %p ) offset = %lu"
+		  "size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, buf_size, rc);
 
         return rc;
 }
@@ -416,9 +420,9 @@ int pread_aligned_handle_holes(struct dstore_obj *obj, char *read_buf,
 
 	rc = pread_aligned(obj, read_buf, buf_size, offset, cb, cb_ctx);
 
-	/* The following logic handle two case which are explained below
+	/* The following logic handles two case which are explained below
 	 * 1. Motr is not able to handle the case where some part of object
-	 * have not been written or created. For that it returns -ENOENT
+	 * has not been written or created. For that it returns -ENOENT
 	 * even though some of them are available and we should get valid data
 	 * for them atleast. For such case, this is the workaround where
 	 * if we are reading more than one block size we will read
@@ -435,20 +439,23 @@ int pread_aligned_handle_holes(struct dstore_obj *obj, char *read_buf,
 		for (i = 0; i < count; i++)
 		{
 			/* read block one by one */
-			rc = pread_aligned(obj, read_buf+(i*bs), bs,
-					   offset+(i*bs), cb, cb_ctx);
+			rc = pread_aligned(obj, read_buf + (i*bs), bs,
+					   offset + (i * bs), cb, cb_ctx);
 
 			if (rc != 0)
 			{
 				if (rc == -ENOENT)
 				{
-					memset(read_buf + (i*bs), 0, bs);
+					memset(read_buf + (i * bs), 0, bs);
 				}
 				else
 				{
-					log_err("Unable to read a block at offset %lu"
-						"block size %lu obj %p rc %d",
-						offset+(i*bs), bs, obj, rc);
+					log_err("Unable to read a block at"
+						"offset %lu block size %lu"
+						"(" OBJ_ID_F " <=> %p ) rc %d",
+						offset + (i * bs), bs,
+						OBJ_ID_P(dstore_obj_id(obj)),
+						obj, rc);
 					return rc;
 				}
 			}
@@ -457,7 +464,9 @@ int pread_aligned_handle_holes(struct dstore_obj *obj, char *read_buf,
 		rc = 0;
 	}
 
-	log_trace("pread_aligned_handle_holes: rc=%d", rc);
+	log_trace("pread_aligned_handle_holes:(" OBJ_ID_F " <=> %p )"
+		  "offset = %lu size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, buf_size, rc);
 
 	return rc;
 }
@@ -476,11 +485,11 @@ static int pwrite_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
 
 	uint32_t num_of_blks = right_blk_num - left_blk_num + 1;
 
-	char *tmpBuf = calloc(num_of_blks*bs, sizeof(char));
+	char *tmpbuf = calloc(num_of_blks*bs, sizeof(char));
 
-	if (tmpBuf == NULL)
+	if (tmpbuf == NULL)
 	{
-		rc = -1;
+		rc = -ENOSPC;
 		log_err("Could not allocate memory");
 		goto out;
 	}
@@ -488,13 +497,15 @@ static int pwrite_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
 	/* IO is not already left aligned, read left most block */
 	if ((offset % bs) != 0)
 	{
-		rc = pread_aligned_handle_holes(obj, tmpBuf,
+		rc = pread_aligned_handle_holes(obj, tmpbuf,
 						bs, left_blk_num*bs,
 						bs, cb, cb_ctx);
 		if (rc < 0)
 		{
-			log_err("Read failed at offset %lu block size %lu ,"
-				"obj %p rc %d", left_blk_num*bs, bs, obj, rc);
+			log_err("Read failed at offset %lu block size %lu,"
+				"(" OBJ_ID_F " <=> %p ) rc %d",
+				left_blk_num * bs, bs,
+				OBJ_ID_P(dstore_obj_id(obj)), obj, rc);
 			goto out;
 		}
 	}
@@ -502,39 +513,45 @@ static int pwrite_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
 	/* IO is not already right aligned, read right most block */
 	if ((offset + count) % bs != 0 && left_blk_num != right_blk_num)
 	{
-		rc = pread_aligned_handle_holes(obj, (tmpBuf+(num_of_blks-1)*bs),
-						bs, right_blk_num*bs, bs,
+		rc = pread_aligned_handle_holes(obj,
+						(tmpbuf +
+						 ((num_of_blks - 1) * bs)),
+						bs, right_blk_num * bs, bs,
 						cb, cb_ctx);
 		if (rc < 0)
 		{
-			log_err("Read failed at offset %lu block size %lu ,"
-				"obj %p rc %d", right_blk_num*bs, bs, obj, rc);
+			log_err("Read failed at offset %lu block size %lu,"
+				"(" OBJ_ID_F " <=> %p ) rc %d",
+				right_blk_num * bs, bs,
+				OBJ_ID_P(dstore_obj_id(obj)), obj, rc);
 			goto out;
 		}
 	}
 
 	uint32_t buf_pos = offset - (left_blk_num * bs);
-	memcpy (tmpBuf+buf_pos, buf, count);
+	memcpy(tmpbuf + buf_pos, buf, count);
 
 	/* Do one write which is both left and right aligned */
-	rc = pwrite_aligned(obj, tmpBuf, num_of_blks*bs,
+	rc = pwrite_aligned(obj, tmpbuf, num_of_blks * bs,
 			    left_blk_num * bs, cb, cb_ctx);
 
 	if (rc < 0)
 	{
-		log_err("Write failed at offset %lu block size %lu ,"
-			"obj %p rc %d", left_blk_num*bs, bs, obj, rc);
+		log_err("Write failed at offset %lu block size %lu,"
+			"(" OBJ_ID_F " <=> %p ) rc %d", left_blk_num * bs, bs,
+			OBJ_ID_P(dstore_obj_id(obj)), obj, rc);
 		goto out;
 	}
-
 out:
 
-	if (tmpBuf)
+	if (tmpbuf)
 	{
-		free(tmpBuf);
+		free(tmpbuf);
 	}
 
-	log_trace("pwrite_unaligned: rc=%d", rc);
+	log_trace("pwrite_unaligned:(" OBJ_ID_F " <=> %p )"
+		  "offset = %lu size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
 	return rc;
 }
 
@@ -551,10 +568,10 @@ static int pread_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
 	uint32_t right_bytes = 0;
 	uint32_t read_count = 0;
 
-	char *tmpBuf = calloc(bs, sizeof(char));
-	if (tmpBuf == NULL)
+	char *tmpbuf = calloc(bs, sizeof(char));
+	if (tmpbuf == NULL)
 	{
-		rc = -1;
+		rc = -ENOSPC;
 		log_err("Could not allocate memory");
 		goto out;
 	}
@@ -575,17 +592,19 @@ static int pread_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
 	read_count = (count < right_bytes) ? count : right_bytes;
 
 	/* read left most block */
-	rc = pread_aligned_handle_holes(obj, tmpBuf, bs,
-					left_blk_num*bs, bs, cb, cb_ctx);
+	rc = pread_aligned_handle_holes(obj, tmpbuf, bs,
+					left_blk_num * bs, bs, cb, cb_ctx);
 
 	if (rc < 0)
 	{
-		log_err("Read failed at offset %lu block size %lu , obj %p rc %d",
-			left_blk_num*bs, bs, obj, rc);
+		log_err("Read failed at offset %lu block size %lu"
+			"(" OBJ_ID_F " <=> %p ) rc %d",
+			left_blk_num * bs, bs,
+			OBJ_ID_P(dstore_obj_id(obj)), obj, rc);
 		goto out;
 	}
 
-	memcpy(buf, tmpBuf+left_bytes, read_count);
+	memcpy(buf, tmpbuf + left_bytes, read_count);
 
 	if (count <= right_bytes)
 	{
@@ -602,19 +621,20 @@ continous_aligned_read:
 
 	if (cont_blk_count > 0)
 	{
-		rc = pread_aligned_handle_holes(obj, buf+buf_pos,
-						cont_blk_count*bs, offset,
+		rc = pread_aligned_handle_holes(obj, buf + buf_pos,
+						cont_blk_count * bs, offset,
 						bs, cb, cb_ctx);
 		if (rc < 0)
 		{
-			log_err("Read failed at offset %lu block size %lu ,"
-				"obj %p rc %d", offset, bs, obj, rc);
+			log_err("Read failed at offset %lu block size %lu,"
+				"(" OBJ_ID_F " <=> %p ) rc %d", offset, bs,
+				OBJ_ID_P(dstore_obj_id(obj)), obj, rc);
 			goto out;
 		}
 
-		count = count - cont_blk_count*bs;
-		offset = offset + cont_blk_count*bs;
-		buf_pos = buf_pos + cont_blk_count*bs;
+		count = count - (cont_blk_count * bs);
+		offset = offset + (cont_blk_count * bs);
+		buf_pos = buf_pos + (cont_blk_count * bs);
 	}
 
 	dassert (count >= 0);
@@ -623,22 +643,25 @@ continous_aligned_read:
 		goto out;
 
 	/* read the right most block */
-	rc = pread_aligned_handle_holes(obj, tmpBuf, bs,
+	rc = pread_aligned_handle_holes(obj, tmpbuf, bs,
 					offset, bs, cb, cb_ctx);
 	if (rc < 0)
 	{
-		log_err("Read failed at offset %lu block size %lu ,"
-			"obj %p rc %d", offset, bs, obj, rc);
+		log_err("Read failed at offset %lu block size %lu,"
+			"(" OBJ_ID_F " <=> %p ) rc %d", offset, bs,
+			OBJ_ID_P(dstore_obj_id(obj)), obj, rc);
 		goto out;
 	}
 
-	memcpy(buf+buf_pos, tmpBuf, count);
+	memcpy(buf + buf_pos, tmpbuf, count);
 
 out:
-	if (tmpBuf)
-		free(tmpBuf);
+	if (tmpbuf)
+		free(tmpbuf);
 
-	log_trace("pread_unaligned: rc=%d", rc);
+	log_trace("pread_unaligned:(" OBJ_ID_F " <=> %p )"
+		  "offset = %lu size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
 	return rc;
 }
 
@@ -659,7 +682,9 @@ int dstore_io_op_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 		rc = pwrite_unaligned(obj, offset, count, bs, buf, NULL, NULL);
 	}
 
-	log_trace("dstore_io_op_pwrite: rc=%d", rc);
+	log_trace("dstore_io_op_pwrite:(" OBJ_ID_F " <=> %p )"
+		  "offset = %lu size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
 	return rc;
 }
 
@@ -681,6 +706,8 @@ int dstore_io_op_pread(struct dstore_obj *obj, off_t offset, size_t count,
 		rc = pread_unaligned(obj, offset, count, bs, buf, NULL, NULL);
 	}
 
-	log_trace("dstore_io_op_pread: rc=%d", rc);
+	log_trace("dstore_io_op_pread:(" OBJ_ID_F " <=> %p )"
+		  "offset = %lu size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
 	return rc;
 }

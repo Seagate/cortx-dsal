@@ -141,11 +141,11 @@ typedef void (*dstore_io_op_cb_t)(void *cb_ctx,
 
 struct dstore *dstore_get(void);
 
-/** This API based on input decide whether the givevn request is aligned or not
+/** This API based on input decides whether the given request is aligned or not
  * If it is aligned request it will directly write the requested amount of data
  * to backend. If it is un-aligned then left and right aligned blocks might be
- * read, modify in to intermediate buffer location. Also rest of the aligned
- * blocks is being copied to intermediate buffer location to form uniform
+ * read-modify in to intermediate buffer location. Also rest of the aligned
+ * blocks are being copied to intermediate buffer location to form uniform
  * aligned write request, and same is issued to the backend.
  * @paramp[in] obj - An open object.
  * @paramp[in] offset - An offset from where write needs to be done.
@@ -156,14 +156,14 @@ struct dstore *dstore_get(void);
 int dstore_io_op_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 			size_t bs, char *buf);
 
-/** This function based on input decide whether the given request is aligned or
+/** This function based on input decides whether the given request is aligned or
  * unaligned I/O. In case of aligned I/O it will simply issue a read request as
- * it is to backend, data directly save in to a requested buffer. In case of
+ * it is to backend, data directly saved in to a requested buffer. In case of
  * unaligned I/O based on calculation an extra left or right aligned block might
  * be read in temporary allocated buffer. Required amount of data is extracted
  * from blocks being read and copied to reqested buffer. For rest of the aligned
  * blocks in between the left and right un-aligned block, aligned read will be
- * issued to backend and data is directly save in to requested buffer.
+ * issued to backend and data is directly saved in to requested buffer.
  * @param[in] obj - An open object.
  * @param[in] offset - An offset from where read needs to be done.
  * @param[in] count  - Amount of data to be read.

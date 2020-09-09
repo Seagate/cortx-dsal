@@ -83,7 +83,7 @@ static void test_open_file(struct dstore *dstore, dstore_oid_t *oid,
 
 	if (obj_valid) {
 		ut_assert_not_null(*obj);
-	}else {
+	} else {
 		/* We would not have expected a file to be opened
 		 * successfully
 		 */
