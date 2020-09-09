@@ -138,7 +138,7 @@ static void test_aligned_unaligned_io(void **state)
 	offset = 3000;
 	write_buf = calloc(count, sizeof(char));
 	memset(write_buf, 'A', count);
-	int rc = dstore_io_op_pwrite(obj, offset, count, bs, write_buf);
+	int rc = dstore_pwrite(obj, offset, count, bs, write_buf);
 	ut_assert_int_equal(rc, 0);
 
 	/* read 100 bytes from offset 3000.
@@ -146,7 +146,7 @@ static void test_aligned_unaligned_io(void **state)
 	 */
 	read_buf = calloc(count, sizeof(char));
 	memset(read_buf, 0, count);
-	rc = dstore_io_op_pread(obj, offset, count, bs, read_buf);
+	rc = dstore_pread(obj, offset, count, bs, read_buf);
 	ut_assert_int_equal(rc, 0);
 
 	rc = memcmp(write_buf, read_buf, count);
@@ -159,7 +159,7 @@ static void test_aligned_unaligned_io(void **state)
 	free(read_buf);
 	read_buf = calloc(bs, sizeof(char));
 	offset = 0;
-	rc = dstore_io_op_pread(obj, offset, bs, bs, read_buf);
+	rc = dstore_pread(obj, offset, bs, bs, read_buf);
 	ut_assert_int_equal(rc, 0);
 	rc = dtlib_verify_data_block(read_buf, 3000, 0);
 	ut_assert_int_equal(rc, 0);
@@ -180,7 +180,7 @@ static void test_aligned_unaligned_io(void **state)
 
 	write_buf = calloc(count, sizeof(char));
 	memset(write_buf, 'B', count);
-	rc = dstore_io_op_pwrite(obj, offset, count, bs, write_buf);
+	rc = dstore_pwrite(obj, offset, count, bs, write_buf);
 	ut_assert_int_equal(rc, 0);
 
 	/* Read first two blocks and check the two block for data */
@@ -188,7 +188,7 @@ static void test_aligned_unaligned_io(void **state)
 	offset = 0;
 	read_buf = calloc(count, sizeof(char));
 	memset(read_buf, 0, count);
-	rc = dstore_io_op_pread(obj, offset, count, bs, read_buf);
+	rc = dstore_pread(obj, offset, count, bs, read_buf);
 	ut_assert_int_equal(rc, 0);
 	rc = dtlib_verify_data_block(read_buf, 3000, 0);
 	ut_assert_int_equal(rc, 0);
@@ -209,7 +209,7 @@ static void test_aligned_unaligned_io(void **state)
 	count = 7188;
 	write_buf = calloc(count, sizeof(char));
 	memset(write_buf, 'C', count);
-	rc = dstore_io_op_pwrite(obj, offset, count, bs, write_buf);
+	rc = dstore_pwrite(obj, offset, count, bs, write_buf);
 	ut_assert_int_equal(rc, 0);
 
 	/* Read at offset 5100, count = 7188
@@ -219,7 +219,7 @@ static void test_aligned_unaligned_io(void **state)
 	offset = 5100;
 	read_buf = calloc(count, sizeof(char));
 	memset(read_buf, 0, count);
-	rc = dstore_io_op_pread(obj, offset, count, bs, read_buf);
+	rc = dstore_pread(obj, offset, count, bs, read_buf);
 	ut_assert_int_equal(rc, 0);
 	rc = dtlib_verify_data_block(read_buf, 7188, 'C');
 	ut_assert_int_equal(rc, 0);
@@ -231,7 +231,7 @@ static void test_aligned_unaligned_io(void **state)
 	read_buf = calloc(count, sizeof(char));
 	memset(read_buf, 0, count);
 
-	rc = dstore_io_op_pread(obj, offset, count, bs, read_buf);
+	rc = dstore_pread(obj, offset, count, bs, read_buf);
 	ut_assert_int_equal(rc, 0);
 	rc = dtlib_verify_data_block(read_buf, 1004, 'B');
 	ut_assert_int_equal(rc, 0);
@@ -248,7 +248,7 @@ static void test_aligned_unaligned_io(void **state)
 	count = 17000;
 	write_buf = calloc(count, sizeof(char));
 	memset(write_buf, 'D', count);
-	rc = dstore_io_op_pwrite(obj, offset, count, bs, write_buf);
+	rc = dstore_pwrite(obj, offset, count, bs, write_buf);
 	ut_assert_int_equal(rc, 0);
 
 	/* Read from offset 12288, count = 17000
@@ -256,7 +256,7 @@ static void test_aligned_unaligned_io(void **state)
 	 */
 	read_buf = calloc(count, sizeof(char));
 	memset(read_buf, 0, count);
-	rc = dstore_io_op_pread(obj, offset, count, bs, read_buf);
+	rc = dstore_pread(obj, offset, count, bs, read_buf);
 	ut_assert_int_equal(rc, 0);
 	rc = dtlib_verify_data_block(read_buf, 17000, 'D');
 	ut_assert_int_equal(rc, 0);
@@ -270,7 +270,7 @@ static void test_aligned_unaligned_io(void **state)
 	count = 20480;
 	read_buf = calloc(count, sizeof(char));
 	memset(read_buf, 0, count);
-	rc = dstore_io_op_pread(obj, offset, count, bs, read_buf);
+	rc = dstore_pread(obj, offset, count, bs, read_buf);
 	ut_assert_int_equal(rc, 0);
 	rc = dtlib_verify_data_block(read_buf, 17000, 'D');
 	ut_assert_int_equal(rc, 0);
@@ -286,7 +286,7 @@ static void test_aligned_unaligned_io(void **state)
 	count = 4096;
 	write_buf = calloc(count, sizeof(char));
 	memset(write_buf, 'E', count);
-	rc = dstore_io_op_pwrite(obj, offset, count, bs, write_buf);
+	rc = dstore_pwrite(obj, offset, count, bs, write_buf);
 	ut_assert_int_equal(rc, 0);
 
 	/* Read at offset 32768, count = 12288
@@ -297,7 +297,7 @@ static void test_aligned_unaligned_io(void **state)
 	offset = 32768;
 	read_buf = calloc(count, sizeof(char));
 	memset(read_buf, 0, count);
-	rc = dstore_io_op_pread(obj, offset, count, bs, read_buf);
+	rc = dstore_pread(obj, offset, count, bs, read_buf);
 	ut_assert_int_equal(rc, 0);
 	rc = dtlib_verify_data_block(read_buf, 8192, 0);
 	ut_assert_int_equal(rc, 0);

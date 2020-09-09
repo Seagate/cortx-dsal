@@ -263,10 +263,10 @@ static int test_write_read_validate(struct dstore_obj *obj,
 
 	dtlib_fill_data_block(write_buf, w_size);
 
-	rc = dstore_io_op_pwrite(obj, w_offset, w_size, bsize, write_buf);
+	rc = dstore_pwrite(obj, w_offset, w_size, bsize, write_buf);
 	ut_assert_int_equal(rc, 0);
 
-	rc = dstore_io_op_pread(obj, r_offset, r_size, bsize, read_buf);
+	rc = dstore_pread(obj, r_offset, r_size, bsize, read_buf);
 	ut_assert_int_equal(rc, 0);
 
 	/* Data integrity check */
@@ -431,7 +431,7 @@ static void test_write_basic(void **state)
 	test_create_file(env->dstore, &env->oid, 0);
 	test_open_file(env->dstore, &env->oid, &obj, 0, true);
 
-	rc = dstore_io_op_pwrite(obj, offset, buf_size, buf_size, raw_buf);
+	rc = dstore_pwrite(obj, offset, buf_size, buf_size, raw_buf);
 	ut_assert_int_equal(rc, 0);
 
 	free(raw_buf);
@@ -472,7 +472,7 @@ static void test_read_basic(void **state)
 	test_open_file(env->dstore, &env->oid, &obj, 0, true);
 
 	dtlib_fill_data_block(raw_buf, buf_size);
-	rc = dstore_io_op_pread(obj, offset, buf_size, buf_size, raw_buf);
+	rc = dstore_pread(obj, offset, buf_size, buf_size, raw_buf);
 	ut_assert_int_equal(rc, 0);
 
 	rc = dtlib_verify_data_block(raw_buf, buf_size, 0);
@@ -516,7 +516,7 @@ static void test_read_deleted_file(void **state)
 	test_delete_file(env->dstore, &env->oid, 0);
 
 	dtlib_fill_data_block(raw_buf, buf_size);
-	rc = dstore_io_op_pread(obj, offset, buf_size, buf_size, raw_buf);
+	rc = dstore_pread(obj, offset, buf_size, buf_size, raw_buf);
 	ut_assert_int_equal(rc, 0);
 
 	rc = dtlib_verify_data_block(raw_buf, buf_size, 0);

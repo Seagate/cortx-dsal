@@ -153,7 +153,7 @@ struct dstore *dstore_get(void);
  * @paramp[in] bs - A minimum block size on which backend operates
  * @paramp[in] buf - Buffer from which data needs to be written to backend
  */
-int dstore_io_op_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
+int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 			size_t bs, char *buf);
 
 /** This function based on input decides whether the given request is aligned or
@@ -171,6 +171,6 @@ int dstore_io_op_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
  * @param[in, out] buf - Buffer for storing the requested data.
  * @return 0 or -errno.
  */
-int dstore_io_op_pread(struct dstore_obj *obj, off_t offset, size_t count,
+int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
 		       size_t bs, char *buf);
 #endif

@@ -213,8 +213,6 @@ out:
 
 static int dstore_io_op_init_and_submit(struct dstore_obj *obj,
                                         struct dstore_io_vec *bvec,
-                                        dstore_io_op_cb_t cb,
-                                        void *cb_ctx,
                                         struct dstore_io_op **out,
                                         enum dstore_io_op_type op_type)
 {
@@ -235,7 +233,7 @@ static int dstore_io_op_init_and_submit(struct dstore_obj *obj,
 	dstore = obj->ds;
 
 	RC_WRAP_LABEL(rc, out, dstore->dstore_ops->io_op_init, obj,
-		      op_type, bvec, cb, cb_ctx, &result);
+		      op_type, bvec, NULL, NULL, &result);
 	RC_WRAP_LABEL(rc, out, dstore->dstore_ops->io_op_submit, result);
 
 	*out = result;
@@ -252,36 +250,31 @@ out:
 
 int dstore_io_op_write(struct dstore_obj *obj,
                        struct dstore_io_vec *bvec,
-                       dstore_io_op_cb_t cb,
-                       void *cb_ctx,
                        struct dstore_io_op **out)
 {
 	int rc;
 
-	rc = dstore_io_op_init_and_submit(obj, bvec, cb, cb_ctx, out,
-					  DSTORE_IO_OP_WRITE);
+	rc = dstore_io_op_init_and_submit(obj, bvec, out, DSTORE_IO_OP_WRITE);
 
 	log_debug("write (" OBJ_ID_F " <=> %p, "
-		  "vec=%p, cb=%p, ctx=%p, *out=%p) rc=%d",
+		  "vec=%p, *out=%p) rc=%d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj,
-		  bvec, cb, cb_ctx, rc == 0 ? *out : NULL, rc);
+		  bvec, rc == 0 ? *out : NULL, rc);
 
 	return rc;
 }
 
 int dstore_io_op_read(struct dstore_obj *obj, struct dstore_io_vec *bvec,
-                      dstore_io_op_cb_t cb, void *cb_ctx,
                       struct dstore_io_op **out)
 {
 	int rc;
 
-	rc = dstore_io_op_init_and_submit(obj, bvec, cb, cb_ctx, out,
-					  DSTORE_IO_OP_READ);
+	rc = dstore_io_op_init_and_submit(obj, bvec, out, DSTORE_IO_OP_READ);
 
 	log_debug("read (" OBJ_ID_F " <=> %p, "
-		  "vec=%p, cb=%p, ctx=%p, *out=%p) rc=%d",
+		  "vec=%p, *out=%p) rc=%d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj,
-		  bvec, cb, cb_ctx, rc == 0 ? *out : NULL, rc);
+		  bvec, rc == 0 ? *out : NULL, rc);
 
 	return rc;
 }
@@ -326,8 +319,7 @@ void dstore_io_op_fini(struct dstore_io_op *op)
 }
 
 static int pwrite_aligned(struct dstore_obj *obj, char *write_buf,
-			  size_t buf_size, off_t offset, dstore_io_op_cb_t cb,
-			  void *cb_ctx)
+			  size_t buf_size, off_t offset)
 {
 	int rc = 0;
 
@@ -344,7 +336,7 @@ static int pwrite_aligned(struct dstore_obj *obj, char *write_buf,
 
 	RC_WRAP_LABEL(rc, out, dstore_io_buf2vec, &buf, &data);
 
-	RC_WRAP_LABEL(rc, out, dstore_io_op_write, obj, data, cb, cb_ctx, &wop);
+	RC_WRAP_LABEL(rc, out, dstore_io_op_write, obj, data, &wop);
 
 	RC_WRAP_LABEL(rc, out, dstore_io_op_wait, wop);
 
@@ -369,8 +361,7 @@ out:
 }
 
 static int pread_aligned(struct dstore_obj *obj, char *read_buf,
-			 size_t buf_size, off_t offset, dstore_io_op_cb_t cb,
-			 void *cb_ctx)
+			 size_t buf_size, off_t offset)
 {
 	int rc = 0;
 
@@ -387,7 +378,7 @@ static int pread_aligned(struct dstore_obj *obj, char *read_buf,
 
         RC_WRAP_LABEL(rc, out, dstore_io_buf2vec, &buf, &data);
 
-        RC_WRAP_LABEL(rc, out, dstore_io_op_read, obj, data, cb, cb_ctx, &rop);
+        RC_WRAP_LABEL(rc, out, dstore_io_op_read, obj, data, &rop);
 
         RC_WRAP_LABEL(rc, out, dstore_io_op_wait, rop);
 
@@ -413,12 +404,11 @@ out:
 
 static
 int pread_aligned_handle_holes(struct dstore_obj *obj, char *read_buf,
-			       size_t buf_size, off_t offset, size_t bs,
-			       dstore_io_op_cb_t cb, void *cb_ctx)
+			       size_t buf_size, off_t offset, size_t bs)
 {
 	int rc = 0;
 
-	rc = pread_aligned(obj, read_buf, buf_size, offset, cb, cb_ctx);
+	rc = pread_aligned(obj, read_buf, buf_size, offset);
 
 	/* The following logic handles two case which are explained below
 	 * 1. Motr is not able to handle the case where some part of object
@@ -440,7 +430,7 @@ int pread_aligned_handle_holes(struct dstore_obj *obj, char *read_buf,
 		{
 			/* read block one by one */
 			rc = pread_aligned(obj, read_buf + (i*bs), bs,
-					   offset + (i * bs), cb, cb_ctx);
+					   offset + (i * bs));
 
 			if (rc != 0)
 			{
@@ -472,8 +462,7 @@ int pread_aligned_handle_holes(struct dstore_obj *obj, char *read_buf,
 }
 
 static int pwrite_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
-			    size_t bs, char *buf, dstore_io_op_cb_t cb,
-			    void *cb_ctx)
+			    size_t bs, char *buf)
 {
 	int rc = 0;
 
@@ -499,7 +488,7 @@ static int pwrite_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
 	{
 		rc = pread_aligned_handle_holes(obj, tmpbuf,
 						bs, left_blk_num*bs,
-						bs, cb, cb_ctx);
+						bs);
 		if (rc < 0)
 		{
 			log_err("Read failed at offset %lu block size %lu,"
@@ -516,8 +505,7 @@ static int pwrite_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
 		rc = pread_aligned_handle_holes(obj,
 						(tmpbuf +
 						 ((num_of_blks - 1) * bs)),
-						bs, right_blk_num * bs, bs,
-						cb, cb_ctx);
+						bs, right_blk_num * bs, bs);
 		if (rc < 0)
 		{
 			log_err("Read failed at offset %lu block size %lu,"
@@ -533,7 +521,7 @@ static int pwrite_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
 
 	/* Do one write which is both left and right aligned */
 	rc = pwrite_aligned(obj, tmpbuf, num_of_blks * bs,
-			    left_blk_num * bs, cb, cb_ctx);
+			    left_blk_num * bs);
 
 	if (rc < 0)
 	{
@@ -557,8 +545,7 @@ out:
 
 
 static int pread_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
-			   size_t bs, char *buf, dstore_io_op_cb_t cb,
-			   void *cb_ctx)
+			   size_t bs, char *buf)
 {
 	int rc = 0;
 	uint32_t cont_blk_count = 0;
@@ -593,7 +580,7 @@ static int pread_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
 
 	/* read left most block */
 	rc = pread_aligned_handle_holes(obj, tmpbuf, bs,
-					left_blk_num * bs, bs, cb, cb_ctx);
+					left_blk_num * bs, bs);
 
 	if (rc < 0)
 	{
@@ -623,7 +610,7 @@ continous_aligned_read:
 	{
 		rc = pread_aligned_handle_holes(obj, buf + buf_pos,
 						cont_blk_count * bs, offset,
-						bs, cb, cb_ctx);
+						bs);
 		if (rc < 0)
 		{
 			log_err("Read failed at offset %lu block size %lu,"
@@ -644,7 +631,7 @@ continous_aligned_read:
 
 	/* read the right most block */
 	rc = pread_aligned_handle_holes(obj, tmpbuf, bs,
-					offset, bs, cb, cb_ctx);
+					offset, bs);
 	if (rc < 0)
 	{
 		log_err("Read failed at offset %lu block size %lu,"
@@ -665,8 +652,8 @@ out:
 	return rc;
 }
 
-int dstore_io_op_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
-			size_t bs, char *buf)
+int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
+		  size_t bs, char *buf)
 {
 	int rc = 0;
 
@@ -675,11 +662,11 @@ int dstore_io_op_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 
 	if (count % bs == 0 && offset % bs == 0)
 	{
-		rc = pwrite_aligned(obj, buf, count, offset, NULL, NULL);
+		rc = pwrite_aligned(obj, buf, count, offset);
 	}
 	else
 	{
-		rc = pwrite_unaligned(obj, offset, count, bs, buf, NULL, NULL);
+		rc = pwrite_unaligned(obj, offset, count, bs, buf);
 	}
 
 	log_trace("dstore_io_op_pwrite:(" OBJ_ID_F " <=> %p )"
@@ -688,8 +675,8 @@ int dstore_io_op_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 	return rc;
 }
 
-int dstore_io_op_pread(struct dstore_obj *obj, off_t offset, size_t count,
-		       size_t bs, char *buf)
+int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
+		 size_t bs, char *buf)
 {
 	int rc = 0;
 
@@ -698,12 +685,11 @@ int dstore_io_op_pread(struct dstore_obj *obj, off_t offset, size_t count,
 
 	if (count % bs == 0 && offset % bs == 0)
 	{
-		rc = pread_aligned_handle_holes(obj, buf, count, offset, bs,
-						NULL, NULL);
+		rc = pread_aligned_handle_holes(obj, buf, count, offset, bs);
 	}
 	else
 	{
-		rc = pread_unaligned(obj, offset, count, bs, buf, NULL, NULL);
+		rc = pread_unaligned(obj, offset, count, bs, buf);
 	}
 
 	log_trace("dstore_io_op_pread:(" OBJ_ID_F " <=> %p )"
