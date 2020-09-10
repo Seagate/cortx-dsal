@@ -15,9 +15,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  * For any questions about this software or licensing,
- * please email opensource@seagate.com or cortx-questions@seagate.com. 
+ * please email opensource@seagate.com or cortx-questions@seagate.com.
  */
 
+#include <stdlib.h>
 #include "dstore.h"
 #include <assert.h> /* TODO: to be replaced with dassert() */
 #include <errno.h> /* ret codes such as EINVAL */
@@ -27,6 +28,7 @@
 #include "common/log.h" /* log_* */
 #include "debug.h" /* dassert */
 #include "dstore_internal.h" /* import internal API definitions */
+#include "dstore_bufvec.h" /* data buffers and vectors */
 
 static struct dstore g_dstore;
 
@@ -211,8 +213,6 @@ out:
 
 static int dstore_io_op_init_and_submit(struct dstore_obj *obj,
                                         struct dstore_io_vec *bvec,
-                                        dstore_io_op_cb_t cb,
-                                        void *cb_ctx,
                                         struct dstore_io_op **out,
                                         enum dstore_io_op_type op_type)
 {
@@ -233,7 +233,7 @@ static int dstore_io_op_init_and_submit(struct dstore_obj *obj,
 	dstore = obj->ds;
 
 	RC_WRAP_LABEL(rc, out, dstore->dstore_ops->io_op_init, obj,
-		      op_type, bvec, cb, cb_ctx, &result);
+		      op_type, bvec, NULL, NULL, &result);
 	RC_WRAP_LABEL(rc, out, dstore->dstore_ops->io_op_submit, result);
 
 	*out = result;
@@ -250,36 +250,31 @@ out:
 
 int dstore_io_op_write(struct dstore_obj *obj,
                        struct dstore_io_vec *bvec,
-                       dstore_io_op_cb_t cb,
-                       void *cb_ctx,
                        struct dstore_io_op **out)
 {
 	int rc;
 
-	rc = dstore_io_op_init_and_submit(obj, bvec, cb, cb_ctx, out,
-					  DSTORE_IO_OP_WRITE);
+	rc = dstore_io_op_init_and_submit(obj, bvec, out, DSTORE_IO_OP_WRITE);
 
 	log_debug("write (" OBJ_ID_F " <=> %p, "
-		  "vec=%p, cb=%p, ctx=%p, *out=%p) rc=%d",
+		  "vec=%p, *out=%p) rc=%d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj,
-		  bvec, cb, cb_ctx, rc == 0 ? *out : NULL, rc);
+		  bvec, rc == 0 ? *out : NULL, rc);
 
 	return rc;
 }
 
 int dstore_io_op_read(struct dstore_obj *obj, struct dstore_io_vec *bvec,
-                      dstore_io_op_cb_t cb, void *cb_ctx,
                       struct dstore_io_op **out)
 {
 	int rc;
 
-	rc = dstore_io_op_init_and_submit(obj, bvec, cb, cb_ctx, out,
-					  DSTORE_IO_OP_READ);
+	rc = dstore_io_op_init_and_submit(obj, bvec, out, DSTORE_IO_OP_READ);
 
 	log_debug("read (" OBJ_ID_F " <=> %p, "
-		  "vec=%p, cb=%p, ctx=%p, *out=%p) rc=%d",
+		  "vec=%p, *out=%p) rc=%d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj,
-		  bvec, cb, cb_ctx, rc == 0 ? *out : NULL, rc);
+		  bvec, rc == 0 ? *out : NULL, rc);
 
 	return rc;
 }
@@ -321,4 +316,384 @@ void dstore_io_op_fini(struct dstore_io_op *op)
 	dstore->dstore_ops->io_op_fini(op);
 
 	log_trace("%s", (char *) "fini <<< ()");
+}
+
+static int pwrite_aligned(struct dstore_obj *obj, char *write_buf,
+			  size_t buf_size, off_t offset)
+{
+	int rc = 0;
+
+	dassert(obj);
+        dassert(write_buf);
+        dassert(offset >= 0);
+
+        struct dstore_io_op *wop = NULL;
+        struct dstore_io_vec *data = NULL;
+        struct dstore_io_buf *buf = NULL;
+
+	RC_WRAP_LABEL(rc, out, dstore_io_buf_init, write_buf, buf_size,
+		      offset, &buf);
+
+	RC_WRAP_LABEL(rc, out, dstore_io_buf2vec, &buf, &data);
+
+	RC_WRAP_LABEL(rc, out, dstore_io_op_write, obj, data, &wop);
+
+	RC_WRAP_LABEL(rc, out, dstore_io_op_wait, wop);
+
+out:
+	if (wop) {
+		dstore_io_op_fini(wop);
+	}
+
+	if (data) {
+		dstore_io_vec_fini(data);
+	}
+
+	if (buf) {
+		dstore_io_buf_fini(buf);
+	}
+
+	log_trace("pwrite_aligned:(" OBJ_ID_F " <=> %p ) offset = %lu"
+		  "size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, buf_size, rc);
+
+	return rc;
+}
+
+static int pread_aligned(struct dstore_obj *obj, char *read_buf,
+			 size_t buf_size, off_t offset)
+{
+	int rc = 0;
+
+	dassert(obj);
+	dassert(read_buf);
+	dassert(offset >= 0);
+
+        struct dstore_io_op *rop = NULL;
+        struct dstore_io_vec *data = NULL;
+        struct dstore_io_buf *buf = NULL;
+
+        RC_WRAP_LABEL(rc, out, dstore_io_buf_init, read_buf, buf_size,
+                      offset, &buf);
+
+        RC_WRAP_LABEL(rc, out, dstore_io_buf2vec, &buf, &data);
+
+        RC_WRAP_LABEL(rc, out, dstore_io_op_read, obj, data, &rop);
+
+        RC_WRAP_LABEL(rc, out, dstore_io_op_wait, rop);
+
+out:
+        if (rop) {
+                dstore_io_op_fini(rop);
+        }
+
+        if (data) {
+                dstore_io_vec_fini(data);
+        }
+
+        if (buf) {
+                dstore_io_buf_fini(buf);
+        }
+
+	log_trace("pread_aligned:(" OBJ_ID_F " <=> %p ) offset = %lu"
+		  "size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, buf_size, rc);
+
+        return rc;
+}
+
+static
+int pread_aligned_handle_holes(struct dstore_obj *obj, char *read_buf,
+			       size_t buf_size, off_t offset, size_t bs)
+{
+	int rc = 0;
+
+	rc = pread_aligned(obj, read_buf, buf_size, offset);
+
+	/* The following logic handles two case which are explained below
+	 * 1. Motr is not able to handle the case where some part of object
+	 * has not been written or created. For that it returns -ENOENT
+	 * even though some of them are available and we should get valid data
+	 * for them atleast. For such case, this is the workaround where
+	 * if we are reading more than one block size we will read
+	 * all the block one by one so that for originally available
+	 * block we will get proper data.
+	 * 2. In case of sparse block, the block which is not written will be
+	 * filled with all zeros.
+	*/
+	if (rc == -ENOENT)
+	{
+		int count = buf_size/bs;
+		int i;
+
+		for (i = 0; i < count; i++)
+		{
+			/* read block one by one */
+			rc = pread_aligned(obj, read_buf + (i*bs), bs,
+					   offset + (i * bs));
+
+			if (rc != 0)
+			{
+				if (rc == -ENOENT)
+				{
+					memset(read_buf + (i * bs), 0, bs);
+				}
+				else
+				{
+					log_err("Unable to read a block at"
+						"offset %lu block size %lu"
+						"(" OBJ_ID_F " <=> %p ) rc %d",
+						offset + (i * bs), bs,
+						OBJ_ID_P(dstore_obj_id(obj)),
+						obj, rc);
+					return rc;
+				}
+			}
+		}
+
+		rc = 0;
+	}
+
+	log_trace("pread_aligned_handle_holes:(" OBJ_ID_F " <=> %p )"
+		  "offset = %lu size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, buf_size, rc);
+
+	return rc;
+}
+
+static int pwrite_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
+			    size_t bs, char *buf)
+{
+	int rc = 0;
+
+	uint32_t left_blk_num = offset/bs;
+
+	uint32_t right_blk_num = (offset + count)/bs;
+	if ((offset + count) % bs == 0)
+		right_blk_num--;
+
+	uint32_t num_of_blks = right_blk_num - left_blk_num + 1;
+
+	char *tmpbuf = calloc(num_of_blks*bs, sizeof(char));
+
+	if (tmpbuf == NULL)
+	{
+		rc = -ENOMEM;
+		log_err("Could not allocate memory");
+		goto out;
+	}
+
+	/* IO is not already left aligned, read left most block */
+	if ((offset % bs) != 0)
+	{
+		rc = pread_aligned_handle_holes(obj, tmpbuf,
+						bs, left_blk_num*bs,
+						bs);
+		if (rc < 0)
+		{
+			log_err("Read failed at offset %lu block size %lu,"
+				"(" OBJ_ID_F " <=> %p ) rc %d",
+				left_blk_num * bs, bs,
+				OBJ_ID_P(dstore_obj_id(obj)), obj, rc);
+			goto out;
+		}
+	}
+
+	/* IO is not already right aligned, read right most block */
+	if ((offset + count) % bs != 0 && left_blk_num != right_blk_num)
+	{
+		rc = pread_aligned_handle_holes(obj,
+						(tmpbuf +
+						 ((num_of_blks - 1) * bs)),
+						bs, right_blk_num * bs, bs);
+		if (rc < 0)
+		{
+			log_err("Read failed at offset %lu block size %lu,"
+				"(" OBJ_ID_F " <=> %p ) rc %d",
+				right_blk_num * bs, bs,
+				OBJ_ID_P(dstore_obj_id(obj)), obj, rc);
+			goto out;
+		}
+	}
+
+	uint32_t buf_pos = offset - (left_blk_num * bs);
+	memcpy(tmpbuf + buf_pos, buf, count);
+
+	/* Do one write which is both left and right aligned */
+	rc = pwrite_aligned(obj, tmpbuf, num_of_blks * bs,
+			    left_blk_num * bs);
+
+	if (rc < 0)
+	{
+		log_err("Write failed at offset %lu block size %lu,"
+			"(" OBJ_ID_F " <=> %p ) rc %d", left_blk_num * bs, bs,
+			OBJ_ID_P(dstore_obj_id(obj)), obj, rc);
+		goto out;
+	}
+out:
+
+	if (tmpbuf)
+	{
+		free(tmpbuf);
+	}
+
+	log_trace("pwrite_unaligned:(" OBJ_ID_F " <=> %p )"
+		  "offset = %lu size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
+	return rc;
+}
+
+
+static int pread_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
+			   size_t bs, char *buf)
+{
+	int rc = 0;
+	uint32_t cont_blk_count = 0;
+	uint32_t buf_pos = 0;
+	uint32_t left_blk_num = 0;
+	uint32_t left_bytes = 0;
+	uint32_t right_bytes = 0;
+	uint32_t read_count = 0;
+
+	char *tmpbuf = calloc(bs, sizeof(char));
+	if (tmpbuf == NULL)
+	{
+		rc = -ENOMEM;
+		log_err("Could not allocate memory");
+		goto out;
+	}
+
+	if (offset % bs == 0 && count >= bs)
+	{
+		/* IO is already left aligned */
+		goto continous_aligned_read;
+	}
+
+	left_blk_num = offset/bs;
+	left_bytes = offset - (left_blk_num * bs);
+	right_bytes = bs - left_bytes;
+
+	/* check for an insider block */
+	/* for if we have to read only 100 bytes from a block,
+	 * this block is insider block */
+	read_count = (count < right_bytes) ? count : right_bytes;
+
+	/* read left most block */
+	rc = pread_aligned_handle_holes(obj, tmpbuf, bs,
+					left_blk_num * bs, bs);
+
+	if (rc < 0)
+	{
+		log_err("Read failed at offset %lu block size %lu"
+			"(" OBJ_ID_F " <=> %p ) rc %d",
+			left_blk_num * bs, bs,
+			OBJ_ID_P(dstore_obj_id(obj)), obj, rc);
+		goto out;
+	}
+
+	memcpy(buf, tmpbuf + left_bytes, read_count);
+
+	if (count <= right_bytes)
+	{
+		goto out;
+	}
+
+	count = count - read_count;
+	offset = offset + read_count;
+	buf_pos = read_count;
+
+continous_aligned_read:
+
+	cont_blk_count = count/bs;
+
+	if (cont_blk_count > 0)
+	{
+		rc = pread_aligned_handle_holes(obj, buf + buf_pos,
+						cont_blk_count * bs, offset,
+						bs);
+		if (rc < 0)
+		{
+			log_err("Read failed at offset %lu block size %lu,"
+				"(" OBJ_ID_F " <=> %p ) rc %d", offset, bs,
+				OBJ_ID_P(dstore_obj_id(obj)), obj, rc);
+			goto out;
+		}
+
+		count = count - (cont_blk_count * bs);
+		offset = offset + (cont_blk_count * bs);
+		buf_pos = buf_pos + (cont_blk_count * bs);
+	}
+
+	dassert (count >= 0);
+
+	if (count == 0) /* Io is already right aligned */
+		goto out;
+
+	/* read the right most block */
+	rc = pread_aligned_handle_holes(obj, tmpbuf, bs,
+					offset, bs);
+	if (rc < 0)
+	{
+		log_err("Read failed at offset %lu block size %lu,"
+			"(" OBJ_ID_F " <=> %p ) rc %d", offset, bs,
+			OBJ_ID_P(dstore_obj_id(obj)), obj, rc);
+		goto out;
+	}
+
+	memcpy(buf + buf_pos, tmpbuf, count);
+
+out:
+	if (tmpbuf)
+		free(tmpbuf);
+
+	log_trace("pread_unaligned:(" OBJ_ID_F " <=> %p )"
+		  "offset = %lu size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
+	return rc;
+}
+
+int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
+		  size_t bs, char *buf)
+{
+	int rc = 0;
+
+	dassert(obj);
+	dassert(buf);
+
+	if (count % bs == 0 && offset % bs == 0)
+	{
+		rc = pwrite_aligned(obj, buf, count, offset);
+	}
+	else
+	{
+		rc = pwrite_unaligned(obj, offset, count, bs, buf);
+	}
+
+	log_trace("dstore_io_op_pwrite:(" OBJ_ID_F " <=> %p )"
+		  "offset = %lu size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
+	return rc;
+}
+
+int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
+		 size_t bs, char *buf)
+{
+	int rc = 0;
+
+	dassert(obj);
+	dassert(buf);
+
+	if (count % bs == 0 && offset % bs == 0)
+	{
+		rc = pread_aligned_handle_holes(obj, buf, count, offset, bs);
+	}
+	else
+	{
+		rc = pread_unaligned(obj, offset, count, bs, buf);
+	}
+
+	log_trace("dstore_io_op_pread:(" OBJ_ID_F " <=> %p )"
+		  "offset = %lu size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
+	return rc;
 }
