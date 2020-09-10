@@ -697,3 +697,4 @@ int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
 		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
 	return rc;
 }
+/*lst line*/
