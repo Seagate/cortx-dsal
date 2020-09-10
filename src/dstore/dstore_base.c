@@ -478,7 +478,7 @@ static int pwrite_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
 
 	if (tmpbuf == NULL)
 	{
-		rc = -ENOSPC;
+		rc = -ENOMEM;
 		log_err("Could not allocate memory");
 		goto out;
 	}
@@ -558,7 +558,7 @@ static int pread_unaligned(struct dstore_obj *obj, off_t offset, size_t count,
 	char *tmpbuf = calloc(bs, sizeof(char));
 	if (tmpbuf == NULL)
 	{
-		rc = -ENOSPC;
+		rc = -ENOMEM;
 		log_err("Could not allocate memory");
 		goto out;
 	}
