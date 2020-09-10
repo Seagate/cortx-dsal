@@ -557,6 +557,7 @@ static int cortx_ds_io_op_init(struct dstore_obj *dobj,
 
 	const m0_time_t schedule_now = 0;
 	const uint64_t empty_mask = 0;
+	const uint64_t empty_flag = 0;
 
 	if (!M0_IN(type, (DSTORE_IO_OP_WRITE, DSTORE_IO_OP_READ))) {
 		log_err("%s", (char *) "Unsupported IO operation");
@@ -584,7 +585,7 @@ static int cortx_ds_io_op_init(struct dstore_obj *dobj,
 	RC_WRAP_LABEL(rc, out, m0_obj_op, &obj->cobj,
 		      dstore_io_op_type2m0_op_type(type), &result->vec.extents,
 		      &result->vec.data,
-		      &result->attrs, empty_mask, &result->cop);
+		      &result->attrs, empty_mask, empty_flag, &result->cop);
 
 	result->cop->op_datum = result;
 	m0_op_setup(result->cop, &cortx_io_op_cbs, schedule_now);
