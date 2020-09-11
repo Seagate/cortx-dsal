@@ -318,6 +318,14 @@ void dstore_io_op_fini(struct dstore_io_op *op)
 	log_trace("%s", (char *) "fini <<< ()");
 }
 
+ssize_t dstore_get_bsize(struct dstore *dstore, dstore_oid_t *oid)
+{
+	dassert(dstore && oid);
+	dassert(dstore_invariant(dstore));
+
+	return dstore->dstore_ops->obj_get_bsize(oid);
+}
+
 static int pwrite_aligned(struct dstore_obj *obj, char *write_buf,
 			  size_t buf_size, off_t offset)
 {
@@ -669,7 +677,7 @@ int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 		rc = pwrite_unaligned(obj, offset, count, bs, buf);
 	}
 
-	log_trace("dstore_io_op_pwrite:(" OBJ_ID_F " <=> %p )"
+	log_trace("dstore_pwrite:(" OBJ_ID_F " <=> %p )"
 		  "offset = %lu size = %lu rc = %d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
 	return rc;
@@ -692,7 +700,7 @@ int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
 		rc = pread_unaligned(obj, offset, count, bs, buf);
 	}
 
-	log_trace("dstore_io_op_pread:(" OBJ_ID_F " <=> %p )"
+	log_trace("dstore_pread:(" OBJ_ID_F " <=> %p )"
 		  "offset = %lu size = %lu rc = %d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
 	return rc;

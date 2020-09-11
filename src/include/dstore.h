@@ -141,7 +141,10 @@ typedef void (*dstore_io_op_cb_t)(void *cb_ctx,
 
 struct dstore *dstore_get(void);
 
-/** This API based on input decides whether the given request is aligned or not
+/* This api returns the block size from motr */
+ssize_t dstore_get_bsize(struct dstore *dstore, dstore_oid_t *oid);
+
+/** This API based on input decides whether the givevn request is aligned or not
  * If it is aligned request it will directly write the requested amount of data
  * to backend. If it is un-aligned then left and right aligned blocks might be
  * read-modify in to intermediate buffer location. Also rest of the aligned
