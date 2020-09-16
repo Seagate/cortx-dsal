@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  * For any questions about this software or licensing,
- * please email opensource@seagate.com or cortx-questions@seagate.com. 
+ * please email opensource@seagate.com or cortx-questions@seagate.com.
  */
 
 /*
@@ -157,57 +157,6 @@ struct dstore_io_op *E2D_op(struct cortx_io_op *op)
 	return (struct dstore_io_op *) op;
 }
 
-enum update_stat_type {
-	UP_ST_WRITE = 1,
-	UP_ST_READ = 2,
-	UP_ST_TRUNCATE = 3
-};
-
-static int update_stat(struct stat *stat, enum update_stat_type utype,
-		       off_t size)
-{
-	struct timeval t;
-
-	if (!stat) {
-		return -EINVAL;
-	}
-
-	if (gettimeofday(&t, NULL) != 0) {
-		return -errno;
-	}
-
-	switch (utype) {
-	case UP_ST_WRITE:
-		stat->st_mtim.tv_sec = t.tv_sec;
-		stat->st_mtim.tv_nsec = 1000 * t.tv_usec;
-		stat->st_ctim = stat->st_mtim;
-		if (size > stat->st_size) {
-			stat->st_size = size;
-			stat->st_blocks = (size + DEV_BSIZE - 1) / DEV_BSIZE;
-		}
-		break;
-
-	case UP_ST_READ:
-		stat->st_atim.tv_sec = t.tv_sec;
-		stat->st_atim.tv_nsec = 1000 * t.tv_usec;
-		break;
-
-	case UP_ST_TRUNCATE:
-		stat->st_ctim.tv_sec = t.tv_sec;
-		stat->st_ctim.tv_nsec = 1000 * t.tv_usec;
-		stat->st_mtim = stat->st_ctim;
-		stat->st_size = size;
-		stat->st_blocks = size / DEV_BSIZE;
-		break;
-
-	default: /* Should not occur */
-		return -EINVAL;
-		break;
-	}
-
-	return 0;
-}
-
 int cortx_ds_obj_get_id(struct dstore *dstore, dstore_oid_t *oid)
 {
 	return m0_ufid_get((struct m0_uint128 *)oid);
@@ -264,148 +213,6 @@ int cortx_ds_obj_del(struct dstore *dstore, void *ctx, dstore_oid_t *oid)
 
 out:
 	log_debug("EXIT: ctx=%p fid= "U128X_F" rc=%d", ctx, U128_P(&fid), rc);
-	return rc;
-}
-
-int cortx_ds_obj_read(struct dstore *dstore, void *ctx, dstore_oid_t *oid,
-	 	      off_t offset, size_t buffer_size, void *buffer,
-		      bool *end_of_file, struct stat *stat)
-{
-	bool local_eof = false;
-	int rc = 0;
-	ssize_t read_bytes = 0;
-	ssize_t bsize;
-	struct m0_uint128 fid;
-
-	/* Following are the cases which needs to be handled to ensure we are
-	 * not reading the data more than data written on file
-	 * 1. If file is empty( i.e: stat->st_size == 0) return immediately
-	 * with data read = 0 and EOF = true.
-	 * 2. If read offset is beyond the data written( i.e: stat->st_size <
-	 * offset from where we are reading) then return immediately with data
-	 * read = 0 and EOF = true.
-	 * 3. If amount of data to be read exceed the EOF( i.e: stat->st_size <
-	 * ( offset + buffer_size ) ) then read the only available data with
-	 * read_bytes = available bytes and EOF = true.
-	 * 4. Read is within the written data so read the requested data and
-	 * EOF =  true if stat->st_size == (offset + buffer_size) i.e boundary
-	 * condition otherwise false
-	 */
-	if (stat->st_size == 0 || stat->st_size < offset) {
-		local_eof = true;
-		goto out;
-	} else if (stat->st_size <= (offset + buffer_size)) {
-		/* Let's read only written bytes */
-		local_eof = true;
-		buffer_size = stat->st_size - offset;
-	}
-
-	m0_fid_copy((struct m0_uint128 *)oid, &fid);
-
-	bsize = m0store_get_bsize(fid);
-	if (bsize < 0) {
-		rc = bsize;
-		goto out;
-	}
-
-	read_bytes = m0store_pread(fid, offset, buffer_size,
-				   bsize, buffer);
-	if (read_bytes < 0) {
-		rc = read_bytes;
-		goto out;
-	}
-
-	dassert(read_bytes == buffer_size);
-
-	RC_WRAP_LABEL(rc, out, update_stat, stat, UP_ST_READ, 0);
-
-	rc = read_bytes;
-	*end_of_file = local_eof;
-out:
-	log_debug("oid=%" PRIx64 ":%" PRIx64 " read_bytes=%lu",
-		  oid->f_hi, oid->f_lo, read_bytes);
-	return rc;
-}
-
-int cortx_ds_obj_write(struct dstore *dstore, void *ctx, dstore_oid_t *oid,
-		       off_t offset, size_t buffer_size,
-		       void *buffer, bool *fsal_stable, struct stat *stat)
-{
-	int rc;
-	ssize_t written_bytes;
-	struct m0_uint128 fid;
-	ssize_t bsize;
-
-	m0_fid_copy((struct m0_uint128 *)oid, &fid);
-
-	bsize = m0store_get_bsize(fid);
-	if (bsize < 0) {
-		rc = bsize;
-		goto out;
-	}
-
-	written_bytes = m0store_pwrite(fid, offset, buffer_size,
-				       bsize, buffer);
-	if (written_bytes < 0) {
-		rc = written_bytes;
-		goto out;
-	}
-
-	RC_WRAP_LABEL(rc, out, update_stat, stat, UP_ST_WRITE,
-		offset + written_bytes);
-	rc = written_bytes;
-	*fsal_stable = true;
-out:
-	log_debug("oid=%" PRIx64 ":%" PRIx64 " written_bytes=%lu",
-		  oid->f_hi, oid->f_lo, written_bytes);
-	return rc;
-}
-
-int cortx_ds_obj_resize(struct dstore *dstore, void *ctx,
-		        dstore_oid_t *oid,
-		        size_t old_size,
-		        size_t new_size)
-{
-	int rc = 0;
-	off_t offset;
-	size_t count;
-	struct m0_uint128 fid;
-
-	assert(ctx && oid);
-
-	if (old_size == new_size) {
-		log_debug("new size == old size == %llu",
-			  (unsigned long long) old_size);
-		rc = 0;
-		goto out;
-	}
-
-	if (old_size < new_size) {
-		log_debug("punching a hole in the file: %llu -> %llu",
-			  (unsigned long long) old_size,
-			  (unsigned long long) new_size);
-		rc = 0;
-		goto out;
-	}
-
-	assert(old_size > new_size);
-
-	log_debug("TRUNC: oid=%" PRIx64 ":%" PRIx64 ", size %llu -> %llu",
-		  oid->f_hi, oid->f_lo,
-		  (unsigned long long) old_size,
-		  (unsigned long long) new_size);
-
-	count = old_size - new_size;
-	offset = new_size;
-	m0_fid_copy((struct m0_uint128 *)oid, &fid);
-
-	rc = m0_file_unmap(fid, count, offset);
-	if (rc != 0) {
-		log_err("Failed to unmap count=%llu, offset=%llu",
-			(unsigned long long) count,
-			(unsigned long long) offset);
-	}
-out:
 	return rc;
 }
 
@@ -654,9 +461,6 @@ const struct dstore_ops cortx_dstore_ops = {
 	.fini = cortx_ds_fini,
 	.obj_create = cortx_ds_obj_create,
 	.obj_delete = cortx_ds_obj_del,
-	.obj_read = cortx_ds_obj_read,
-	.obj_write = cortx_ds_obj_write,
-	.obj_resize = cortx_ds_obj_resize,
 	.obj_get_id = cortx_ds_obj_get_id,
 	.obj_open = cortx_ds_obj_open,
 	.obj_close = cortx_ds_obj_close,

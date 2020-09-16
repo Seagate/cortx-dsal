@@ -116,41 +116,58 @@ int dstore_obj_delete(struct dstore *dstore, void *ctx,
 	return dstore->dstore_ops->obj_delete(dstore, ctx, oid);
 }
 
-int dstore_obj_read(struct dstore *dstore, void *ctx,
-		    dstore_oid_t *oid, off_t offset,
-		    size_t buffer_size, void *buffer, bool *end_of_file,
-		    struct stat *stat)
+int dstore_obj_resize(struct dstore_obj *obj, size_t old_size, size_t new_size)
 {
-	assert(dstore && oid && buffer && buffer_size && stat &&
-		dstore->dstore_ops->obj_read);
+	int rc = 0;
+	size_t bsize;
+	size_t count;
+	off_t offset;
+	char *tmp_buf = NULL;
 
-	return dstore->dstore_ops->obj_read(dstore, ctx, oid, offset,
-					    buffer_size, buffer, end_of_file,
-					    stat);
-}
+	/* Following code handle two cases
+	 * 1. If old and new size are same it's a noop hence no change
+	 * 2. If old < new size, the extra ranges is considered as a hole and
+	 * while reading back those user will get all zero for this range
+	 */
+	if (old_size <= new_size) {
+		log_trace("dstore_obj_resize:(" OBJ_ID_F " <=> %p )"
+			  "old_size = %lu new_size = %lu rc = %d",
+			  OBJ_ID_P(dstore_obj_id(obj)), obj, old_size, new_size,
+			  rc);
+		goto out;
+	}
 
-int dstore_obj_write(struct dstore *dstore, void *ctx,
-		     dstore_oid_t *oid, off_t offset,
-		     size_t buffer_size, void *buffer, bool *fsal_stable,
-		     struct stat *stat)
-{
-	assert(dstore && oid && buffer && buffer_size && stat &&
-		dstore->dstore_ops->obj_write);
+	/* Shrink operation */
+	bsize = dstore_get_bsize(obj->ds,
+				 (dstore_oid_t *)dstore_obj_id(obj));
+	count = old_size - new_size;
+	offset = new_size;
 
-	return dstore->dstore_ops->obj_write(dstore, ctx, oid, offset,
-					     buffer_size, buffer, fsal_stable,
-					     stat);
-}
+	/* Temporary space to have all zeroed out data to be written in to a
+	 * given object for specified range
+	 */
+	tmp_buf = calloc(1, count);
 
-int dstore_obj_resize(struct dstore *dstore, void *ctx,
-		      dstore_oid_t *oid,
-		      size_t old_size, size_t new_size)
-{
-	assert(dstore && oid &&
-	       dstore->dstore_ops && dstore->dstore_ops->obj_resize);
+	if (tmp_buf == NULL ) {
+		rc = -ENOMEM;
+		log_err("dstore_obj_resize: Could not allocate memory");
+		goto out;
+	}
 
-	return dstore->dstore_ops->obj_resize(dstore, ctx, oid, old_size,
-					      new_size);
+	RC_WRAP_LABEL(rc, out, dstore_pwrite, obj, offset, count, bsize,
+		      tmp_buf);
+
+	/* TODO: Add logic to remove blocks from backend object store */
+out:
+	if (tmp_buf != NULL ) {
+		free(tmp_buf);
+	}
+
+	log_trace("dstore_obj_resize:(" OBJ_ID_F " <=> %p )"
+		  "old_size = %lu new_size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, old_size, new_size,
+		  rc);
+	return rc;
 }
 
 int dstore_get_new_objid(struct dstore *dstore, dstore_oid_t *oid)
