@@ -199,21 +199,46 @@ int main(int argc, char *argv[])
 {
 	int rc;
 
+	char *test_logs = "/var/log/cortx/test/ut/ut_dsal.logs";
+
+	printf("Dsal space stats test\n");
+
+	rc = ut_load_config(CONF_FILE);
+	if (rc != 0) {
+		printf("ut_load_config: err = %d\n", rc);
+		goto out;
+	}
+
+	test_logs = ut_get_config("dsal", "log_path", test_logs);
+
+	rc = ut_init(test_logs);
+	if (rc < 0)
+	{
+		printf("ut_init: err = %d\n", rc);
+		goto out;
+	}
+
 	struct test_case test_group[] = {
 		ut_test_case(test_creat_big_objects, NULL, NULL),
 		ut_test_case(test_delete_big_objects, NULL, NULL),
 	};
 
+	int test_count =  sizeof(test_group)/sizeof(test_group[0]);
+	int test_failed = 0;
+
 	rc = dtlib_setup_for_multi(argc, argv);
 	if (rc) {
-		goto error_out;
+		printf("Failed to set up the test group environment");
+		goto out;
 	}
-	rc = DSAL_UT_RUN(test_group, test_group_setup, test_group_teardown);
+
+	test_failed = DSAL_UT_RUN(test_group, test_group_setup, test_group_teardown);
 	dtlib_teardown();
 
-	return rc;
+	ut_fini();
+	ut_summary(test_count, test_failed);
 
-error_out:
-	printf("Setup failed");
+out:
+	free(test_logs);
 	return rc;
 }
