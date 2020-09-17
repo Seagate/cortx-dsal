@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  * For any questions about this software or licensing,
- * please email opensource@seagate.com or cortx-questions@seagate.com. 
+ * please email opensource@seagate.com or cortx-questions@seagate.com.
  */
 
 /* This file defines an API that is used and implemented by DSAL
@@ -365,23 +365,6 @@ struct dstore_ops {
 	int (*obj_delete) (struct dstore *dstore, void *ctx,
 			   dstore_oid_t *oid);
 
-	/* FIXME: Deprecated interface */
-	int (*obj_read) (struct dstore *dstore, void *ctx,
-			 dstore_oid_t *oid, off_t offset,
-			 size_t buffer_size, void *buffer, bool *end_of_file,
-			 struct stat *stat);
-
-	/* FIXME: Deprecated interface */
-	int (*obj_write) (struct dstore *dstore, void *ctx,
-			  dstore_oid_t *oid, off_t offset,
-			  size_t buffer_size,
-			  void *buffer, bool *fsal_stable, struct stat *stat);
-
-	/* FIXME: Deprecated interface */
-	int (*obj_resize) (struct dstore *dstore, void *ctx,
-			   dstore_oid_t *oid,
-		           size_t old_size, size_t new_size);
-
 	/*
 	 * TODO: This function does not have well-defined behavior
 	 * yet. This needs to be addressed.
@@ -487,9 +470,6 @@ bool dstore_ops_invariant(const struct dstore_ops *ops)
 		ops->fini &&
 		ops->obj_create &&
 		ops->obj_delete &&
-		ops->obj_read &&
-		ops->obj_write &&
-		ops->obj_resize &&
 		ops->obj_get_id &&
 		ops->obj_open &&
 		ops->obj_close &&

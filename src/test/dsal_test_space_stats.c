@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  * For any questions about this software or licensing,
- * please email opensource@seagate.com or cortx-questions@seagate.com. 
+ * please email opensource@seagate.com or cortx-questions@seagate.com.
  */
 
 #include <stdio.h> /* *printf */
@@ -92,9 +92,9 @@ static void test_creat_big_objects(void **state)
 	size_t offset = 0;
 	void *raw_buf = NULL;
 	struct dstore_obj *obj = NULL;
-	bool written;
 	struct stat stats;
 	struct env *env = ENV_FROM_STATE(state);
+	size_t bsize  = 4 << 10;
 
 	memset(&stats, 0, sizeof(stats));
 	raw_buf = calloc(1, buf_size);
@@ -120,9 +120,9 @@ static void test_creat_big_objects(void **state)
 		for (j = 0; j < 100; j++) {
 			/* Using below API purposely, as it provides offset
 			   option which can be used to create big files */
-			rc = dstore_obj_write(env->dstore, NULL, &env->oids[i],
-				offset, buf_size, raw_buf, &written, &stats);
-			ut_assert_int_equal(rc, buf_size);
+			rc = dstore_pwrite(obj, offset, buf_size, bsize,
+					   raw_buf);
+			ut_assert_int_equal(rc, 0);
 			offset += buf_size;
 		}
 
