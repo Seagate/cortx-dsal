@@ -31,9 +31,9 @@ DSAL_VERSION=${CORTXFS_VERSION:-"$(cat $DSAL_SOURCE_ROOT/VERSION)"}
 
 
 # Select DSAL Build Version.
-# Superproject: derived from cortxfs version.
-# Local: taken from git rev.
-DSAL_BUILD_VERSION=${CORTXFS_BUILD_VERSION:-"$(git rev-parse --short HEAD)"}
+# Taken from git rev of DSAL repo
+GIT_DIR="$DSAL_SOURCE_ROOT/.git"
+DSAL_BUILD_VERSION="$(git --git-dir "$GIT_DIR" rev-parse --short HEAD)"
 
 # Optional, CORTX-UTILS source location.
 # Superproject: uses pre-defined location.
