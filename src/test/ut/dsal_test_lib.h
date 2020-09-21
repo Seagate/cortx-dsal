@@ -39,6 +39,8 @@
 #define SUCCESS 0
 #define FAILURE 1
 
+#define CONF_FILE "/tmp/cortxfs/build-dsal/test/ut/ut_dsal.conf"
+
 /* Get initialized dstore instance. */
 struct dstore *dtlib_dstore(void);
 
