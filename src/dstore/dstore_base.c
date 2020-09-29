@@ -116,13 +116,79 @@ int dstore_obj_delete(struct dstore *dstore, void *ctx,
 	return dstore->dstore_ops->obj_delete(dstore, ctx, oid);
 }
 
-int dstore_obj_resize(struct dstore_obj *obj, size_t old_size, size_t new_size)
+/* TODO: Can be removed when plugin API for removing objects from backend store
+ * is implemented
+ */
+#define DSAL_MAX_IO_SIZE (1024*1024)
+
+static int dstore_obj_shrink(struct dstore_obj *obj,  size_t old_size,
+			     size_t new_size)
 {
-	int rc = 0;
+	int rc;
+	size_t nr_request;
+	size_t tail_size;
+	size_t index;
 	size_t bsize;
 	size_t count;
 	off_t offset;
 	char *tmp_buf = NULL;
+
+	bsize = dstore_get_bsize(obj->ds,
+				 (dstore_oid_t *)dstore_obj_id(obj));
+
+	count = old_size - new_size;
+	offset = new_size;
+
+	/* Temporary space to have all zeroed out data to be written in to a
+	 * given object for specified range
+	 * At any given point of time we won't be writing more than
+	 * DSAL_MAX_IO_SIZE
+	 */
+	tmp_buf = calloc(1, DSAL_MAX_IO_SIZE);
+
+	if (tmp_buf == NULL ) {
+		rc = -ENOMEM;
+		log_err("dstore_obj_resize: Could not allocate memory");
+		goto out;
+	}
+
+	/* TODO: Below logic is a temporary workaround to make sure after shrink
+	 * operation if we do extend then user will get all zeroes instead of
+	 * getting old/stale data, this logic can be deprecated once dstore
+	 * plugin API to remove truncated object is implemented, which can be
+	 * called directly from here.
+	 */
+
+	nr_request =  count / DSAL_MAX_IO_SIZE;
+	tail_size = count - (nr_request * DSAL_MAX_IO_SIZE);
+
+	for (index = 0; index < nr_request; index++) {
+		RC_WRAP_LABEL(rc, out, dstore_pwrite, obj,
+			      offset + (index * DSAL_MAX_IO_SIZE),
+			      DSAL_MAX_IO_SIZE, bsize, tmp_buf);
+	}
+
+	if (tail_size) {
+		/* Write down remaining data */
+		RC_WRAP_LABEL(rc, out, dstore_pwrite, obj,
+			      offset + (index * DSAL_MAX_IO_SIZE), tail_size,
+			      bsize, tmp_buf);
+	}
+out:
+	if (tmp_buf != NULL ) {
+		free(tmp_buf);
+	}
+
+	log_trace("dstore_obj_shrink:(" OBJ_ID_F " <=> %p )"
+		  "old_size = %lu new_size = %lu rc = %d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, old_size, new_size,
+		  rc);
+	return rc;
+}
+
+int dstore_obj_resize(struct dstore_obj *obj, size_t old_size, size_t new_size)
+{
+	int rc = 0;
 
 	/* Following code handle two cases
 	 * 1. If old and new size are same it's a noop hence no change
@@ -138,31 +204,8 @@ int dstore_obj_resize(struct dstore_obj *obj, size_t old_size, size_t new_size)
 	}
 
 	/* Shrink operation */
-	bsize = dstore_get_bsize(obj->ds,
-				 (dstore_oid_t *)dstore_obj_id(obj));
-	count = old_size - new_size;
-	offset = new_size;
-
-	/* Temporary space to have all zeroed out data to be written in to a
-	 * given object for specified range
-	 */
-	tmp_buf = calloc(1, count);
-
-	if (tmp_buf == NULL ) {
-		rc = -ENOMEM;
-		log_err("dstore_obj_resize: Could not allocate memory");
-		goto out;
-	}
-
-	RC_WRAP_LABEL(rc, out, dstore_pwrite, obj, offset, count, bsize,
-		      tmp_buf);
-
-	/* TODO: Add logic to remove blocks from backend object store */
+	RC_WRAP_LABEL(rc, out, dstore_obj_shrink, obj, old_size, new_size);
 out:
-	if (tmp_buf != NULL ) {
-		free(tmp_buf);
-	}
-
 	log_trace("dstore_obj_resize:(" OBJ_ID_F " <=> %p )"
 		  "old_size = %lu new_size = %lu rc = %d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj, old_size, new_size,
