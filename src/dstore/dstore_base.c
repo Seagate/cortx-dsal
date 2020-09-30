@@ -29,6 +29,7 @@
 #include "debug.h" /* dassert */
 #include "dstore_internal.h" /* import internal API definitions */
 #include "dstore_bufvec.h" /* data buffers and vectors */
+#include "operation.h"
 
 static struct dstore g_dstore;
 
@@ -378,12 +379,27 @@ void dstore_io_op_fini(struct dstore_io_op *op)
 	log_trace("%s", (char *) "fini <<< ()");
 }
 
-ssize_t dstore_get_bsize(struct dstore *dstore, dstore_oid_t *oid)
+static ssize_t __dstore_get_bsize(struct dstore *dstore, dstore_oid_t *oid)
 {
 	dassert(dstore && oid);
 	dassert(dstore_invariant(dstore));
 
 	return dstore->dstore_ops->obj_get_bsize(oid);
+}
+
+
+ssize_t dstore_get_bsize(struct dstore *dstore, dstore_oid_t *oid)
+{
+	size_t rc;
+
+	perfc_trace_inii(PFT_DSTORE_GET, PEM_DSTORE_TO_NFS);
+
+	rc = __dstore_get_bsize(dstore, oid);
+
+	perfc_trace_attr(PEA_DSTORE_GET_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
+	return rc;
 }
 
 static int pwrite_aligned(struct dstore_obj *obj, char *write_buf,
@@ -743,8 +759,8 @@ int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 	return rc;
 }
 
-int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
-		 size_t bs, char *buf)
+static int __dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
+			  size_t bs, char *buf)
 {
 	int rc = 0;
 
@@ -763,5 +779,23 @@ int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
 	log_trace("dstore_pread:(" OBJ_ID_F " <=> %p )"
 		  "offset = %lu size = %lu rc = %d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
+	return rc;
+}
+
+int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
+		 size_t bs, char *buf)
+{
+	int rc;
+
+	perfc_trace_inii(PFT_DSTORE_PREAD, PEM_DSTORE_TO_NFS);
+	perfc_trace_attr(PEA_DSTORE_PREAD_OFFSET, offset);
+	perfc_trace_attr(PEA_DSTORE_PREAD_COUNT, count);
+	perfc_trace_attr(PEA_DSTORE_PREAD_BS, bs);
+
+	rc = __dstore_pread(obj, offset, count, bs, buf);
+
+	perfc_trace_attr(PEA_DSTORE_PREAD_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
 	return rc;
 }
