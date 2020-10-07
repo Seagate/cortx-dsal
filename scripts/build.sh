@@ -27,7 +27,8 @@ DSAL_DSTORE_BACKEND=${DSAL_DSTORE_BACKEND:-"cortx"}
 # Select DSAL Source Version.
 # Superproject: derived from cortxfs version.
 # Local: taken fron VERSION file.
-DSAL_VERSION=${CORTXFS_VERSION:-"$(cat $DSAL_SOURCE_ROOT/VERSION)"}
+DSAL_VERSION_TEMP=$(cat "$DSAL_SOURCE_ROOT/VERSION")
+DSAL_VERSION=${DSAL_VERSION:-"$DSAL_VERSION_TEMP"}
 
 
 # Select DSAL Build Version.
@@ -99,39 +100,52 @@ dsal_print_env() {
 
 ###############################################################################
 dsal_configure() {
-    if [ -f $DSAL_BUILD/.config ]; then
+    if [ -f "$DSAL_BUILD/.config" ]; then
         echo "Build folder exists. Please remove it."
         exit 1;
     fi
 
-    mkdir $DSAL_BUILD
-    cd $DSAL_BUILD
+    mkdir "$DSAL_BUILD"
+    cd "$DSAL_BUILD"
 
     local cmd="cmake \
 -DBASE_VERSION:STRING=${DSAL_VERSION} \
 -DRELEASE_VER:STRING=${DSAL_BUILD_VERSION} \
 -DUSE_CORTX_STORE=${USE_CORTX_STORE} \
 -DUSE_POSIX_STORE=${USE_POSIX_STORE} \
--DLIBCORTXUTILS:PATH=${CORTX_UTILS_LIB} \
--DCORTXUTILSINC:PATH=${CORTX_UTILS_INC} \
+-DLIBCORTXUTILS:PATH=\"$CORTX_UTILS_LIB\" \
+-DCORTXUTILSINC:PATH=\"$CORTX_UTILS_INC\" \
 -DENABLE_DASSERT=${ENABLE_DASSERT} \
 -DPROJECT_NAME_BASE:STRING=${PROJECT_NAME_BASE} \
 -DINSTALL_DIR_ROOT:STRING=${INSTALL_DIR_ROOT}
 $DSAL_SRC"
-    echo -e "Config:\n $cmd" > $DSAL_BUILD/.config
-    echo -e "Env:\n $(dsal_print_env)" >> $DSAL_BUILD/.config
-    $cmd
+
+    echo -e "Config:\n $cmd" > "$DSAL_BUILD/.config"
+    echo -e "Env:\n $(dsal_print_env)" >> "$DSAL_BUILD/.config"
+	
+cmake \
+-DBASE_VERSION:STRING="$DSAL_VERSION" \
+-DRELEASE_VER:STRING="$DSAL_BUILD_VERSION" \
+-DUSE_CORTX_STORE=${USE_CORTX_STORE} \
+-DUSE_POSIX_STORE=${USE_POSIX_STORE} \
+-DLIBCORTXUTILS:PATH="$CORTX_UTILS_LIB" \
+-DCORTXUTILSINC:PATH="$CORTX_UTILS_INC" \
+-DENABLE_DASSERT="$ENABLE_DASSERT" \
+-DPROJECT_NAME_BASE:STRING="$PROJECT_NAME_BASE" \
+-DINSTALL_DIR_ROOT:STRING="$INSTALL_DIR_ROOT" \
+"$DSAL_SRC"
+    
     cd -
 }
 
 ###############################################################################
 dsal_make() {
-    if [ ! -d $DSAL_BUILD ]; then
+    if [ ! -d "$DSAL_BUILD" ]; then
         echo "Build folder does not exist. Please run 'config'"
         exit 1;
     fi
 
-    cd $DSAL_BUILD
+    cd "$DSAL_BUILD"
     make "$@"
     cd -
 }

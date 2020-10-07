@@ -65,8 +65,8 @@ The @PROJECT_NAME@ is Data Store Abstraction Layer library.
 cmake . -DUSE_POSIX_STORE=%{use_posix_store}     \
 	-DUSE_POSIX_OBJ=%{use_posix_obj}         \
 	-DUSE_CORTX_STORE=%{use_cortx_store}       \
-	-DCORTXUTILSINC:PATH=@CORTXUTILSINC@         \
-	-DLIBCORTXUTILS:PATH=@LIBCORTXUTILS@	\
+	-DCORTXUTILSINC:PATH="@CORTXUTILSINC@"         \
+	-DLIBCORTXUTILS:PATH="@LIBCORTXUTILS@"	\
 	-DENABLE_DASSERT=%{enable_dassert}	\
 	-DPROJECT_NAME_BASE=@PROJECT_NAME_BASE@
 
