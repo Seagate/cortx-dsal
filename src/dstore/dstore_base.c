@@ -736,7 +736,7 @@ out:
 	return rc;
 }
 
-int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
+static int __dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 		  size_t bs, char *buf)
 {
 	int rc = 0;
@@ -756,6 +756,24 @@ int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 	log_trace("dstore_pwrite:(" OBJ_ID_F " <=> %p )"
 		  "offset = %lu size = %lu rc = %d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
+	return rc;
+}
+
+int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
+		 size_t bs, char *buf)
+{
+	int rc;
+
+	perfc_trace_inii(PFT_DSTORE_PWRITE, PEM_DSTORE_TO_NFS);
+	perfc_trace_attr(PEA_DSTORE_PWRITE_OFFSET, offset);
+	perfc_trace_attr(PEA_DSTORE_PWRITE_COUNT, count);
+	perfc_trace_attr(PEA_DSTORE_PWRITE_BS, bs);
+
+	rc = __dstore_pwrite(obj, offset, count, bs, buf);
+
+	perfc_trace_attr(PEA_DSTORE_PWRITE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
 	return rc;
 }
 
