@@ -344,6 +344,9 @@ static enum m0_obj_opcode
 		case DSTORE_IO_OP_READ:
 			obj_opcode = M0_OC_READ;
 			break;
+		case DSTORE_IO_OP_FREE:
+			obj_opcode = M0_OC_FREE;
+			break;
 		default:
 			/* Unsupported operation type */
 			dassert(0);
@@ -412,6 +415,71 @@ out:
 	return rc;
 }
 
+static int cortx_ds_io_trunc_op_init(struct dstore_obj *dobj,
+				     enum dstore_io_op_type type,
+				     struct dstore_extent_vec *vec,
+				     dstore_io_op_cb_t cb,
+				     void *cb_ctx,
+				     struct dstore_io_op **out)
+{
+	int rc = 0;
+	struct cortx_dstore_obj *obj = D2E_obj(dobj);
+	struct cortx_io_op *result = NULL;
+
+	const m0_time_t schedule_now = 0;
+	const uint64_t empty_mask = 0;
+	const uint64_t empty_flag = 0;
+
+	if (!M0_IN(type, (DSTORE_IO_OP_FREE))) {
+		log_err("%s", (char *) "Unsupported IO operation");
+		rc = RC_WRAP_SET(-EINVAL);
+		goto out;
+	}
+
+	dassert(out);
+	dassert(vec);
+
+	M0_ALLOC_PTR(result);
+	if (result == NULL) {
+		rc = RC_WRAP_SET(-ENOMEM);
+		goto out;
+	}
+
+	result->base.type = type;
+	result->base.obj = dobj;
+	result->base.cb = cb;
+	result->base.cb_ctx = cb_ctx;
+
+	/* we only need to fill extents here, we do not need data vector */
+	result->vec.extents.iv_vec.v_nr = vec->nr;
+	result->vec.extents.iv_vec.v_count = vec->svec;
+	result->vec.extents.iv_index = vec->ovec;
+
+
+	RC_WRAP_LABEL(rc, out, m0_obj_op, &obj->cobj,
+		      dstore_io_op_type2m0_op_type(type), &result->vec.extents,
+		      NULL, NULL,
+		      empty_mask, empty_flag, &result->cop);
+
+        result->cop->op_datum = result;
+        m0_op_setup(result->cop, &cortx_io_op_cbs, schedule_now);
+
+        *out = E2D_op(result);
+        result = NULL;
+
+out:
+        if (result) {
+                m0_free(result);
+        }
+
+        log_debug("cortx_ds_io_trunc_op_init obj=%p, vec=%p"
+		  "op=%p rc=%d", obj, vec,
+                  rc == 0 ? *out : NULL, rc);
+
+        dassert((!(*out)) || dstore_io_op_invariant(*out));
+        return rc;
+}
+
 static int cortx_ds_io_op_submit(struct dstore_io_op *dop)
 {
 	struct cortx_io_op *op = D2E_op(dop);
@@ -469,4 +537,5 @@ const struct dstore_ops cortx_dstore_ops = {
 	.io_op_wait = cortx_ds_io_op_wait,
 	.io_op_fini = cortx_ds_io_op_fini,
 	.obj_get_bsize = cortx_ds_obj_get_bsize,
+	.io_trunc_op_init = cortx_ds_io_trunc_op_init,
 };

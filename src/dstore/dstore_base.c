@@ -309,6 +309,40 @@ out:
 	return rc;
 }
 
+static int dstore_io_trunc_op_init_and_submit(struct dstore_obj *obj,
+					      struct dstore_extent_vec *vec,
+					      struct dstore_io_op **out,
+					      enum dstore_io_op_type op_type)
+{
+	int rc;
+	struct dstore *dstore;
+	struct dstore_io_op *result = NULL;
+
+	dassert(obj);
+	dassert(obj->ds);
+	dassert(out);
+	dassert(dstore_obj_invariant(obj));
+	dassert(op_type == DSTORE_IO_OP_FREE);
+
+	dstore = obj->ds;
+
+	RC_WRAP_LABEL(rc, out, dstore->dstore_ops->io_trunc_op_init, obj,
+		      op_type, vec, NULL, NULL, &result);
+	RC_WRAP_LABEL(rc, out, dstore->dstore_ops->io_op_submit, result);
+
+	*out = result;
+	result = NULL;
+
+out:
+	if (result) {
+		dstore->dstore_ops->io_op_fini(result);
+	}
+
+	dassert((!(*out)) || dstore_io_op_invariant(*out));
+	return rc;
+
+}
+
 int dstore_io_op_write(struct dstore_obj *obj,
                        struct dstore_io_vec *bvec,
                        struct dstore_io_op **out)
@@ -799,3 +833,46 @@ int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
 
 	return rc;
 }
+
+int dstore_io_op_trunc(struct dstore_obj *obj, struct dstore_extent_vec *vec,
+		       struct dstore_io_op **out)
+{
+	int rc;
+
+	rc = dstore_io_trunc_op_init_and_submit(obj, vec, out,
+						DSTORE_IO_OP_FREE);
+
+	log_debug("trunc (" OBJ_ID_F " <=> %p, "
+		  "vec=%p *out=%p) rc=%d",
+		  OBJ_ID_P(dstore_obj_id(obj)), obj, vec,
+		  rc == 0 ? *out : NULL, rc);
+
+	return rc;
+}
+
+int dstore_ptrunc(struct dstore_obj *obj, struct dstore_extent_vec *vec)
+{
+	int rc = 0;
+
+	dassert(obj);
+	dassert(vec);
+
+	struct dstore_io_op *wop = NULL;
+
+	RC_WRAP_LABEL(rc, out, dstore_io_op_trunc, obj, vec, &wop);
+
+	RC_WRAP_LABEL(rc, out, dstore_io_op_wait, wop);
+
+out:
+	if (wop) {
+		dstore_io_op_fini(wop);
+	}
+
+	log_trace("dstore_pread:(" OBJ_ID_F " <=> %p )"
+                  "vec = %p rc = %d",
+                  OBJ_ID_P(dstore_obj_id(obj)), obj, vec, rc);
+
+
+	return rc;
+}
+

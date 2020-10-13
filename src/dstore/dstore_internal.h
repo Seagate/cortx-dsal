@@ -202,6 +202,15 @@ struct dstore_io_vec {
 	struct dstore_io_buf edbuf;
 };
 
+struct dstore_extent_vec {
+	/* Array of unmap req sizes sizes.*/
+	uint64_t *svec;
+	/* Array of offsets. */
+	uint64_t *ovec;
+	/* Number of elements in the arrays. */
+	uint64_t nr;
+};
+
 static inline
 bool dstore_io_vec_invariant(const struct dstore_io_vec *io_vec)
 {
@@ -456,6 +465,18 @@ struct dstore_ops {
 
 	/* This function returns block size */
 	ssize_t (*obj_get_bsize) (dstore_oid_t *oid);
+
+	/* DSAL.OP_INIT Interface.
+	 * This function creates a new unmap operation using the
+	 * given inputs.
+	 */
+	int (*io_trunc_op_init)(struct dstore_obj *dobj,
+				enum dstore_io_op_type type,
+				struct dstore_extent_vec *vec,
+				dstore_io_op_cb_t cb,
+				void *cb_ctx,
+				struct dstore_io_op **out);
+
 };
 
 static inline
@@ -477,6 +498,7 @@ bool dstore_ops_invariant(const struct dstore_ops *ops)
 		ops->io_op_submit &&
 		ops->io_op_wait &&
 		ops->obj_get_bsize &&
+		ops->io_trunc_op_init &&
 
 		/* AllocBuf/FreeBuf interfaces are not in use right now. */
 #if 0

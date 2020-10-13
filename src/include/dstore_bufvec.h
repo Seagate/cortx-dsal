@@ -59,6 +59,8 @@ const void *dstore_io_buf_data(const struct dstore_io_buf *buf);
  */
 struct dstore_io_vec;
 
+struct dstore_extent_vec;
+
 /** Create a new vector with the specified size. */
 int dstore_io_vec_init(size_t count,
 		       struct dstore_io_vec **vec);
