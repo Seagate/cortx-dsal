@@ -767,7 +767,7 @@ int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 	perfc_trace_inii(PFT_DSTORE_PWRITE, PEM_DSTORE_TO_NFS);
 	perfc_trace_attr(PEA_DSTORE_PWRITE_OFFSET, offset);
 	perfc_trace_attr(PEA_DSTORE_PWRITE_COUNT, count);
-	perfc_trace_attr(PEA_DSTORE_PWRITE_BS, bs);
+	perfc_trace_attr(PEA_DSTORE_BS, bs);
 
 	rc = __dstore_pwrite(obj, offset, count, bs, buf);
 
@@ -808,7 +808,7 @@ int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
 	perfc_trace_inii(PFT_DSTORE_PREAD, PEM_DSTORE_TO_NFS);
 	perfc_trace_attr(PEA_DSTORE_PREAD_OFFSET, offset);
 	perfc_trace_attr(PEA_DSTORE_PREAD_COUNT, count);
-	perfc_trace_attr(PEA_DSTORE_PREAD_BS, bs);
+	perfc_trace_attr(PEA_DSTORE_BS, bs);
 
 	rc = __dstore_pread(obj, offset, count, bs, buf);
 
