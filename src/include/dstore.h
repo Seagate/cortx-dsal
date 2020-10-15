@@ -73,8 +73,6 @@ struct dstore_io_op;
 /* see the description in dstore_bufvec.h */
 struct dstore_io_vec;
 
-struct dstore_extent_vec;
-
 int dstore_init(struct collection_item *cfg, int flags);
 
 int dstore_fini(struct dstore *dstore);
@@ -187,8 +185,9 @@ int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
 
 /** This API does the handling for truncating a file
  *  @param[in] obj - An open object.
- *  @param[in] vec - vector filled with offset and count.
+ *  @param[in] offset - offset from where to start deallocation.
+ *  @param[in] count - count of deallocation.
  *  @return 0 or -errno.
  */
-int dstore_ptrunc(struct dstore_obj *obj, struct dstore_extent_vec *vec);
+int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count);
 #endif

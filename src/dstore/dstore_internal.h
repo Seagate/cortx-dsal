@@ -28,6 +28,9 @@
 
 #include "dstore.h" /* import public data types */
 
+#define IO_DATA  0x001
+#define IO_NO_DATA    0x002
+
 struct dstore_ops;
 static inline
 bool dstore_ops_invariant(const struct dstore_ops *ops);
@@ -202,15 +205,6 @@ struct dstore_io_vec {
 	struct dstore_io_buf edbuf;
 };
 
-struct dstore_extent_vec {
-	/* Array of unmap req sizes sizes.*/
-	uint64_t *svec;
-	/* Array of offsets. */
-	uint64_t *ovec;
-	/* Number of elements in the arrays. */
-	uint64_t nr;
-};
-
 static inline
 bool dstore_io_vec_invariant(const struct dstore_io_vec *io_vec)
 {
@@ -220,6 +214,10 @@ bool dstore_io_vec_invariant(const struct dstore_io_vec *io_vec)
 	 * NOTE: This condition may be changed in future if
 	 * we need to implement Alloc/Free operations.
 	 */
+	if (io_vec->flags & IO_NO_DATA) {
+		return true;
+	}
+
 	bool non_empty_vec_has_data = ((!io_vec->nr) ||
 				       (io_vec->dbufs && io_vec->svec &&
 					io_vec->ovec && io_vec->bsize));
@@ -324,7 +322,8 @@ bool dstore_io_op_invariant(const struct dstore_io_op *op)
 	 * NOTE: only WRITE/READ is supported so far.
 	 */
 	bool op_is_supported = (op->type == DSTORE_IO_OP_WRITE ||
-				op->type == DSTORE_IO_OP_READ);
+				op->type == DSTORE_IO_OP_READ ||
+				op->type == DSTORE_IO_OP_FREE);
 	/* Condition:
 	 *	Data vector should be a valid object whether it has
 	 *	data or not.
@@ -466,17 +465,6 @@ struct dstore_ops {
 	/* This function returns block size */
 	ssize_t (*obj_get_bsize) (dstore_oid_t *oid);
 
-	/* DSAL.OP_INIT Interface.
-	 * This function creates a new unmap operation using the
-	 * given inputs.
-	 */
-	int (*io_trunc_op_init)(struct dstore_obj *dobj,
-				enum dstore_io_op_type type,
-				struct dstore_extent_vec *vec,
-				dstore_io_op_cb_t cb,
-				void *cb_ctx,
-				struct dstore_io_op **out);
-
 };
 
 static inline
@@ -498,7 +486,6 @@ bool dstore_ops_invariant(const struct dstore_ops *ops)
 		ops->io_op_submit &&
 		ops->io_op_wait &&
 		ops->obj_get_bsize &&
-		ops->io_trunc_op_init &&
 
 		/* AllocBuf/FreeBuf interfaces are not in use right now. */
 #if 0

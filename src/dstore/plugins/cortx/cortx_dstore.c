@@ -290,10 +290,11 @@ void dstore_io_vec2bufext(struct dstore_io_vec *io_vec,
 			  struct cortx_io_bufext *bufext)
 {
 	M0_SET0(bufext);
-
-	bufext->data.ov_buf = (void **) io_vec->dbufs;
-	bufext->data.ov_vec.v_nr = io_vec->nr;
-	bufext->data.ov_vec.v_count = io_vec->svec;
+	if (io_vec->flags & IO_DATA) {
+		bufext->data.ov_buf = (void **) io_vec->dbufs;
+		bufext->data.ov_vec.v_nr = io_vec->nr;
+		bufext->data.ov_vec.v_count = io_vec->svec;
+	}
 
 	bufext->extents.iv_vec.v_nr = io_vec->nr;
 	bufext->extents.iv_vec.v_count = io_vec->svec;
@@ -369,7 +370,7 @@ static int cortx_ds_io_op_init(struct dstore_obj *dobj,
 	const uint64_t empty_mask = 0;
 	const uint64_t empty_flag = 0;
 
-	if (!M0_IN(type, (DSTORE_IO_OP_WRITE, DSTORE_IO_OP_READ))) {
+	if (!M0_IN(type, (DSTORE_IO_OP_WRITE, DSTORE_IO_OP_READ, DSTORE_IO_OP_FREE))) {
 		log_err("%s", (char *) "Unsupported IO operation");
 		rc = RC_WRAP_SET(-EINVAL);
 		goto out;
@@ -387,8 +388,12 @@ static int cortx_ds_io_op_init(struct dstore_obj *dobj,
 
 	result->base.type = type;
 	result->base.obj = dobj;
+	result->base.cb = cb;
+	result->base.cb_ctx = cb_ctx;
 
-	dstore_io_vec_move(&result->base.data, bvec);
+	if (bvec->flags & IO_DATA) {
+		dstore_io_vec_move(&result->base.data, bvec);
+	}
 
 	dstore_io_vec2bufext(&result->base.data, &result->vec);
 
@@ -413,71 +418,6 @@ out:
 
 	dassert((!(*out)) || dstore_io_op_invariant(*out));
 	return rc;
-}
-
-static int cortx_ds_io_trunc_op_init(struct dstore_obj *dobj,
-				     enum dstore_io_op_type type,
-				     struct dstore_extent_vec *vec,
-				     dstore_io_op_cb_t cb,
-				     void *cb_ctx,
-				     struct dstore_io_op **out)
-{
-	int rc = 0;
-	struct cortx_dstore_obj *obj = D2E_obj(dobj);
-	struct cortx_io_op *result = NULL;
-
-	const m0_time_t schedule_now = 0;
-	const uint64_t empty_mask = 0;
-	const uint64_t empty_flag = 0;
-
-	if (!M0_IN(type, (DSTORE_IO_OP_FREE))) {
-		log_err("%s", (char *) "Unsupported IO operation");
-		rc = RC_WRAP_SET(-EINVAL);
-		goto out;
-	}
-
-	dassert(out);
-	dassert(vec);
-
-	M0_ALLOC_PTR(result);
-	if (result == NULL) {
-		rc = RC_WRAP_SET(-ENOMEM);
-		goto out;
-	}
-
-	result->base.type = type;
-	result->base.obj = dobj;
-	result->base.cb = cb;
-	result->base.cb_ctx = cb_ctx;
-
-	/* we only need to fill extents here, we do not need data vector */
-	result->vec.extents.iv_vec.v_nr = vec->nr;
-	result->vec.extents.iv_vec.v_count = vec->svec;
-	result->vec.extents.iv_index = vec->ovec;
-
-
-	RC_WRAP_LABEL(rc, out, m0_obj_op, &obj->cobj,
-		      dstore_io_op_type2m0_op_type(type), &result->vec.extents,
-		      NULL, NULL,
-		      empty_mask, empty_flag, &result->cop);
-
-        result->cop->op_datum = result;
-        m0_op_setup(result->cop, &cortx_io_op_cbs, schedule_now);
-
-        *out = E2D_op(result);
-        result = NULL;
-
-out:
-        if (result) {
-                m0_free(result);
-        }
-
-        log_debug("cortx_ds_io_trunc_op_init obj=%p, vec=%p"
-		  "op=%p rc=%d", obj, vec,
-                  rc == 0 ? *out : NULL, rc);
-
-        dassert((!(*out)) || dstore_io_op_invariant(*out));
-        return rc;
 }
 
 static int cortx_ds_io_op_submit(struct dstore_io_op *dop)
@@ -537,5 +477,4 @@ const struct dstore_ops cortx_dstore_ops = {
 	.io_op_wait = cortx_ds_io_op_wait,
 	.io_op_fini = cortx_ds_io_op_fini,
 	.obj_get_bsize = cortx_ds_obj_get_bsize,
-	.io_trunc_op_init = cortx_ds_io_trunc_op_init,
 };

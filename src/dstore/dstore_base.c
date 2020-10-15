@@ -31,6 +31,8 @@
 #include "dstore_bufvec.h" /* data buffers and vectors */
 #include "operation.h"
 
+#define DSAL_MAX_IO_SIZE (1024*1024)
+
 static struct dstore g_dstore;
 
 struct dstore *dstore_get(void)
@@ -126,60 +128,15 @@ static int dstore_obj_shrink(struct dstore_obj *obj,  size_t old_size,
 			     size_t new_size)
 {
 	int rc;
-	size_t nr_request;
-	size_t tail_size;
-	size_t index;
-	size_t bsize;
 	size_t count;
 	off_t offset;
-	char *tmp_buf = NULL;
-
-	bsize = dstore_get_bsize(obj->ds,
-				 (dstore_oid_t *)dstore_obj_id(obj));
 
 	count = old_size - new_size;
 	offset = new_size;
 
-	/* Temporary space to have all zeroed out data to be written in to a
-	 * given object for specified range
-	 * At any given point of time we won't be writing more than
-	 * DSAL_MAX_IO_SIZE
-	 */
-	tmp_buf = calloc(1, DSAL_MAX_IO_SIZE);
+	RC_WRAP_LABEL(rc, out, dstore_deallocate, obj, offset, count);
 
-	if (tmp_buf == NULL ) {
-		rc = -ENOMEM;
-		log_err("dstore_obj_resize: Could not allocate memory");
-		goto out;
-	}
-
-	/* TODO: Below logic is a temporary workaround to make sure after shrink
-	 * operation if we do extend then user will get all zeroes instead of
-	 * getting old/stale data, this logic can be deprecated once dstore
-	 * plugin API to remove truncated object is implemented, which can be
-	 * called directly from here.
-	 */
-
-	nr_request =  count / DSAL_MAX_IO_SIZE;
-	tail_size = count - (nr_request * DSAL_MAX_IO_SIZE);
-
-	for (index = 0; index < nr_request; index++) {
-		RC_WRAP_LABEL(rc, out, dstore_pwrite, obj,
-			      offset + (index * DSAL_MAX_IO_SIZE),
-			      DSAL_MAX_IO_SIZE, bsize, tmp_buf);
-	}
-
-	if (tail_size) {
-		/* Write down remaining data */
-		RC_WRAP_LABEL(rc, out, dstore_pwrite, obj,
-			      offset + (index * DSAL_MAX_IO_SIZE), tail_size,
-			      bsize, tmp_buf);
-	}
 out:
-	if (tmp_buf != NULL ) {
-		free(tmp_buf);
-	}
-
 	log_trace("dstore_obj_shrink:(" OBJ_ID_F " <=> %p )"
 		  "old_size = %lu new_size = %lu rc = %d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj, old_size, new_size,
@@ -289,7 +246,8 @@ static int dstore_io_op_init_and_submit(struct dstore_obj *obj,
 	dassert(dstore_io_vec_invariant(bvec));
 	/* Only WRITE/READ is supported so far */
 	dassert(op_type == DSTORE_IO_OP_WRITE ||
-		op_type == DSTORE_IO_OP_READ);
+		op_type == DSTORE_IO_OP_READ ||
+		op_type == DSTORE_IO_OP_FREE);
 
 	dstore = obj->ds;
 
@@ -307,40 +265,6 @@ out:
 
 	dassert((!(*out)) || dstore_io_op_invariant(*out));
 	return rc;
-}
-
-static int dstore_io_trunc_op_init_and_submit(struct dstore_obj *obj,
-					      struct dstore_extent_vec *vec,
-					      struct dstore_io_op **out,
-					      enum dstore_io_op_type op_type)
-{
-	int rc;
-	struct dstore *dstore;
-	struct dstore_io_op *result = NULL;
-
-	dassert(obj);
-	dassert(obj->ds);
-	dassert(out);
-	dassert(dstore_obj_invariant(obj));
-	dassert(op_type == DSTORE_IO_OP_FREE);
-
-	dstore = obj->ds;
-
-	RC_WRAP_LABEL(rc, out, dstore->dstore_ops->io_trunc_op_init, obj,
-		      op_type, vec, NULL, NULL, &result);
-	RC_WRAP_LABEL(rc, out, dstore->dstore_ops->io_op_submit, result);
-
-	*out = result;
-	result = NULL;
-
-out:
-	if (result) {
-		dstore->dstore_ops->io_op_fini(result);
-	}
-
-	dassert((!(*out)) || dstore_io_op_invariant(*out));
-	return rc;
-
 }
 
 int dstore_io_op_write(struct dstore_obj *obj,
@@ -834,15 +758,15 @@ int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
 	return rc;
 }
 
-int dstore_io_op_trunc(struct dstore_obj *obj, struct dstore_extent_vec *vec,
-		       struct dstore_io_op **out)
+int dstore_dealloc_op(struct dstore_obj *obj, struct dstore_io_vec *vec,
+		      struct dstore_io_op **out)
 {
 	int rc;
 
-	rc = dstore_io_trunc_op_init_and_submit(obj, vec, out,
-						DSTORE_IO_OP_FREE);
+	rc = dstore_io_op_init_and_submit(obj, vec, out,
+					  DSTORE_IO_OP_FREE);
 
-	log_debug("trunc (" OBJ_ID_F " <=> %p, "
+	log_debug("dstore_dealloc_op (" OBJ_ID_F " <=> %p, "
 		  "vec=%p *out=%p) rc=%d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj, vec,
 		  rc == 0 ? *out : NULL, rc);
@@ -850,27 +774,106 @@ int dstore_io_op_trunc(struct dstore_obj *obj, struct dstore_extent_vec *vec,
 	return rc;
 }
 
-int dstore_ptrunc(struct dstore_obj *obj, struct dstore_extent_vec *vec)
+int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count)
 {
 	int rc = 0;
 
 	dassert(obj);
-	dassert(vec);
 
+	char *tmp_buf = NULL;
 	struct dstore_io_op *wop = NULL;
+	struct dstore_io_vec *vec = NULL;
+	size_t nr_request;
+	size_t tail_size;
+	size_t nblk_per_req;
+	size_t ndata_per_req;
+	int i;
 
-	RC_WRAP_LABEL(rc, out, dstore_io_op_trunc, obj, vec, &wop);
+	size_t bsize = dstore_get_bsize(obj->ds,
+					(dstore_oid_t *)dstore_obj_id(obj));
 
-	RC_WRAP_LABEL(rc, out, dstore_io_op_wait, wop);
+	if (offset % bsize != 0) {
+		/*we need to make deallocate operation left aligned */
+		tmp_buf = calloc(bsize, sizeof(char));
+		uint32_t left_blk_num = offset/bsize;
+		uint32_t write_count = offset - (left_blk_num * bsize);
+		write_count = bsize - write_count;
+
+		if (count < write_count) {
+
+			write_count = count;
+		}
+
+		RC_WRAP_LABEL(rc, out, dstore_pwrite, obj,
+			      offset, write_count,
+			      bsize, tmp_buf);
+
+		if (write_count == count) {
+			goto out;
+		}
+
+		count = count - write_count;
+		offset = offset + write_count;
+	}
+
+	ndata_per_req = DSAL_MAX_IO_SIZE;	
+	nr_request = count / ndata_per_req;
+	tail_size = count - (nr_request * ndata_per_req);
+	nblk_per_req = ndata_per_req / bsize;
+
+	vec = calloc(1, sizeof(struct dstore_io_vec));
+        if (vec == NULL) {
+                rc = -ENOMEM;
+                goto out;
+        }
+	/* we do not need io buffer here, we just need to send extents info */
+	vec->flags |= IO_NO_DATA;
+	dstore_io_vec_set_from_edbuf(vec);
+
+	for (i = 0; i < nr_request; i++) {
+
+		*(vec->ovec) = offset;
+		*(vec->svec) = ndata_per_req;
+
+		RC_WRAP_LABEL(rc, out, dstore_dealloc_op, obj, vec, &wop);
+
+		RC_WRAP_LABEL(rc, out, dstore_io_op_wait, wop);
+
+		dstore_io_op_fini(wop);
+
+		wop = NULL;
+
+		offset += ndata_per_req;
+	}
+
+	if (tail_size) {
+
+		*(vec->ovec) = offset;
+		*(vec->svec) = tail_size;
+
+		RC_WRAP_LABEL(rc, out, dstore_dealloc_op, obj, vec, &wop);
+
+		RC_WRAP_LABEL(rc, out, dstore_io_op_wait, wop);
+
+		dstore_io_op_fini(wop);
+
+		wop = NULL;
+
+		offset += tail_size;
+	}
 
 out:
 	if (wop) {
 		dstore_io_op_fini(wop);
 	}
 
-	log_trace("dstore_pread:(" OBJ_ID_F " <=> %p )"
-                  "vec = %p rc = %d",
-                  OBJ_ID_P(dstore_obj_id(obj)), obj, vec, rc);
+	if (tmp_buf) {
+		free(tmp_buf);
+	}
+
+	log_trace("dstore_deallocate:(" OBJ_ID_F " <=> %p )"
+                  "offset = %lu count = %lu rc = %d",
+                  OBJ_ID_P(dstore_obj_id(obj)), obj, offset, count, rc);
 
 
 	return rc;

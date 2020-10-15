@@ -86,6 +86,7 @@ int dstore_io_buf2vec(struct dstore_io_buf **buf, struct dstore_io_vec **vec)
 	}
 
 	result->edbuf = **buf;
+	result->flags |= IO_DATA;
 	dstore_io_buf_fini(*buf);
 	*buf = NULL;
 
