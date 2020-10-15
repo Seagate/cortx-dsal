@@ -736,7 +736,7 @@ out:
 	return rc;
 }
 
-static int __dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
+static inline int __dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 		  size_t bs, char *buf)
 {
 	int rc = 0;
