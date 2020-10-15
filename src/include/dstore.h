@@ -183,11 +183,4 @@ int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
 		       size_t bs, char *buf);
 
-/** This API does the handling for truncating a file
- *  @param[in] obj - An open object.
- *  @param[in] offset - offset from where to start deallocation.
- *  @param[in] count - count of deallocation.
- *  @return 0 or -errno.
- */
-int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count);
 #endif

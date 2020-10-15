@@ -290,11 +290,9 @@ void dstore_io_vec2bufext(struct dstore_io_vec *io_vec,
 			  struct cortx_io_bufext *bufext)
 {
 	M0_SET0(bufext);
-	if (io_vec->flags & IO_DATA) {
-		bufext->data.ov_buf = (void **) io_vec->dbufs;
-		bufext->data.ov_vec.v_nr = io_vec->nr;
-		bufext->data.ov_vec.v_count = io_vec->svec;
-	}
+	bufext->data.ov_buf = (void **) io_vec->dbufs;
+	bufext->data.ov_vec.v_nr = io_vec->nr;
+	bufext->data.ov_vec.v_count = io_vec->svec;
 
 	bufext->extents.iv_vec.v_nr = io_vec->nr;
 	bufext->extents.iv_vec.v_count = io_vec->svec;
@@ -391,16 +389,27 @@ static int cortx_ds_io_op_init(struct dstore_obj *dobj,
 	result->base.cb = cb;
 	result->base.cb_ctx = cb_ctx;
 
-	if (bvec->flags & IO_DATA) {
+	if (dstore_io_vec_flags_has_data(bvec->flags)) {
+		/* READ/WRITE Operation */
 		dstore_io_vec_move(&result->base.data, bvec);
+		dstore_io_vec2bufext(&result->base.data, &result->vec);
+
+		RC_WRAP_LABEL(rc, out, m0_obj_op, &obj->cobj,
+			      dstore_io_op_type2m0_op_type(type), &result->vec.extents,
+			      &result->vec.data,
+			      &result->attrs, empty_mask, empty_flag, &result->cop);
 	}
+	else {
+		/* Free operation */
+		result->vec.extents.iv_vec.v_nr = bvec->nr;
+		result->vec.extents.iv_vec.v_count = bvec->svec;
+		result->vec.extents.iv_index = bvec->ovec;
 
-	dstore_io_vec2bufext(&result->base.data, &result->vec);
-
-	RC_WRAP_LABEL(rc, out, m0_obj_op, &obj->cobj,
-		      dstore_io_op_type2m0_op_type(type), &result->vec.extents,
-		      &result->vec.data,
-		      &result->attrs, empty_mask, empty_flag, &result->cop);
+		RC_WRAP_LABEL(rc, out, m0_obj_op, &obj->cobj,
+			      dstore_io_op_type2m0_op_type(type), &result->vec.extents,
+			      NULL, NULL,
+			      empty_mask, empty_flag, &result->cop);
+	}
 
 	result->cop->op_datum = result;
 	m0_op_setup(result->cop, &cortx_io_op_cbs, schedule_now);

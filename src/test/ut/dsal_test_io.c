@@ -310,6 +310,69 @@ static void test_aligned_unaligned_io(void **state)
 	test_delete_file(env->dstore, &env->oid, 0);
 }
 
+static void test_resize_op(void **state)
+{
+	struct dstore_obj *obj = NULL;
+	struct env *env = ENV_FROM_STATE(state);
+	off_t offset = 0;
+	const size_t bs = 4096;
+	size_t count = 0;
+
+	test_create_file(env->dstore, &env->oid, 0);
+	test_open_file(env->dstore, &env->oid, &obj, 0, true);
+
+	char *read_buf = NULL;
+	char *write_buf = NULL;
+
+	count = 4096;
+	offset = 0;
+	write_buf = calloc(count, sizeof(char));
+	memset(write_buf, 'A', count);
+	int rc = dstore_pwrite(obj, offset, count, bs, write_buf);
+	ut_assert_int_equal(rc, 0);
+	free(write_buf);
+
+	rc = dstore_obj_resize(obj, 4096, 3000);
+	ut_assert_int_equal(rc, 0);
+
+	count = 4096;
+	offset = 0;
+	read_buf = calloc(bs, sizeof(char));
+	rc = dstore_pread(obj, offset, count, bs, read_buf);
+	ut_assert_int_equal(rc, 0);
+	rc = dtlib_verify_data_block(read_buf, 3000, 'A');
+	ut_assert_int_equal(rc, 0);
+	rc = dtlib_verify_data_block(read_buf+3000, 1096, 0);
+	ut_assert_int_equal(rc, 0);
+	free(read_buf);
+
+	count = 5192;
+	offset = 3000;
+	write_buf = calloc(count, sizeof(char));
+	memset(write_buf, 'B', count);
+	rc = dstore_pwrite(obj, offset, count, bs, write_buf);
+	ut_assert_int_equal(rc, 0);
+	free(write_buf);
+
+	rc = dstore_obj_resize(obj, 8192, 4096);
+	ut_assert_int_equal(rc, 0);
+
+	count = 8192;
+	offset = 0;
+	read_buf = calloc(count, sizeof(char));
+	rc = dstore_pread(obj, offset, count, bs, read_buf);
+	ut_assert_int_equal(rc, 0);
+	rc = dtlib_verify_data_block(read_buf, 3000, 'A');
+	ut_assert_int_equal(rc, 0);
+	rc = dtlib_verify_data_block(read_buf+3000, 1096, 'B');
+	ut_assert_int_equal(rc, 0);
+	rc = dtlib_verify_data_block(read_buf+4096, 4096, 0);
+	ut_assert_int_equal(rc, 0);
+	free(read_buf);
+
+	test_close_file(obj, 0);
+	test_delete_file(env->dstore, &env->oid, 0);
+}
 
 /*****************************************************************************/
 static int test_group_setup(void **state)
@@ -364,6 +427,7 @@ int main(int argc, char *argv[])
 
 	struct test_case test_group[] = {
 		ut_test_case(test_aligned_unaligned_io, NULL, NULL),
+		ut_test_case(test_resize_op, NULL, NULL),
 	};
 
 	int test_count =  sizeof(test_group)/sizeof(test_group[0]);

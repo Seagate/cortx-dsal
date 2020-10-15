@@ -28,8 +28,7 @@
 
 #include "dstore.h" /* import public data types */
 
-#define IO_DATA  0x001
-#define IO_NO_DATA    0x002
+#define DSTORE_IVF_NO_IO_DATA 0x01
 
 struct dstore_ops;
 static inline
@@ -205,16 +204,21 @@ struct dstore_io_vec {
 	struct dstore_io_buf edbuf;
 };
 
+static bool dstore_io_vec_flags_has_data(uint64_t flags) {
+	return (flags & DSTORE_IVF_NO_IO_DATA) == 0;
+}
+
 static inline
 bool dstore_io_vec_invariant(const struct dstore_io_vec *io_vec)
 {
-	/* Condition:
-	 *	If vector has elements then the corresponding fields
-	 *	should be filled.
-	 * NOTE: This condition may be changed in future if
-	 * we need to implement Alloc/Free operations.
+	/* When NO_DATA flag is set, the vector invariant cannot be violated:
+	 * the embedded buf has only offset, size -- they are always consistent.
+	 * consistency of the extents (when embedded buf is not used) is not checked
+	 * anyway, and it is not assumed.
+	 * Therefore, it is safe to assume that when this flag is set, we have
+	 * a valid io_vec object.
 	 */
-	if (io_vec->flags & IO_NO_DATA) {
+	if (!dstore_io_vec_flags_has_data(io_vec->flags)) {
 		return true;
 	}
 
@@ -337,10 +341,12 @@ bool dstore_io_op_invariant(const struct dstore_io_op *op)
 
 	/* Condition:
 	 *	IO operations require non-empty vectors.
-	 * NOTE: This condition should be changed/removed
-	 *	 when Alloc/Free implemented.
+	 * NOTE: This condition is not valid for alloc/free.
 	 */
-	bool has_needed_data = (op->data.nr != 0);
+	bool has_needed_data = true;
+	if (op->type != DSTORE_IO_OP_FREE) {
+		has_needed_data = (op->data.nr != 0);
+	}
 
 	return op_is_supported && has_valid_vec && has_needed_data &&
 		has_ref_to_obj;
