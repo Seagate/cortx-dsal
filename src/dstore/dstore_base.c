@@ -793,9 +793,6 @@ static int dstore_dealloc_op(struct dstore_obj *obj, struct dstore_io_vec *vec,
 static int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count)
 {
 	int rc = 0;
-
-	dassert(obj);
-
 	char *tmp_buf = NULL;
 	struct dstore_io_op *dop = NULL;
 	struct dstore_io_vec vec;
@@ -803,23 +800,40 @@ static int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count)
 	size_t ndata_per_req;
 	size_t tail_size;
 	int i;
+	size_t old_size;
+	size_t bsize;
+	uint32_t left_blk_num;
+	uint32_t write_count;
 	/* For tracing purpose */
 	off_t off = offset;
 	size_t size = count;
 
-	size_t bsize = dstore_get_bsize(obj->ds,
-					(dstore_oid_t *)dstore_obj_id(obj));
+	dassert(obj);
+
+	bsize = dstore_get_bsize(obj->ds,
+				 (dstore_oid_t *) dstore_obj_id(obj));
+
+	/* calculate count again so as to make dealloc operation bsize aligned.
+	 * Example: if bsize is 4096 and file size is 3000, truncate to 0.
+	 * we can not deallocate 3000 bytes, we have to make operation bsize
+	 * aligned, else motr code will panic.
+	 */
+	old_size = count + offset;
+	if (old_size % bsize != 0) {
+		old_size = ((old_size + bsize) / bsize) * bsize;
+		count = old_size - offset;
+	}
 
 	if (offset % bsize != 0) {
 		/*we need to make deallocate operation left aligned */
 		tmp_buf = calloc(bsize, sizeof(char));
-		uint32_t left_blk_num = offset/bsize;
-		uint32_t write_count = offset - (left_blk_num * bsize);
-		write_count = bsize - write_count;
-
-		if (count < write_count) {
-			write_count = count;
+		if (tmp_buf == NULL) {
+			rc = -ENOMEM;
+			goto out;
 		}
+		left_blk_num = offset / bsize;
+		write_count = offset - (left_blk_num * bsize);
+		write_count = bsize - write_count;
 
 		RC_WRAP_LABEL(rc, out, dstore_pwrite, obj,
 			      offset, write_count,
@@ -833,7 +847,7 @@ static int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count)
 		offset = offset + write_count;
 	}
 
-	ndata_per_req = DSAL_MAX_DEALLOC_OP_SIZE;	
+	ndata_per_req = (DSAL_MAX_DEALLOC_OP_SIZE / bsize) * bsize;	
 	nr_request = count / ndata_per_req;
 	tail_size = count - (nr_request * ndata_per_req);
 
@@ -844,8 +858,8 @@ static int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count)
 
 	for (i = 0; i < nr_request; i++) {
 
-		*(vec.ovec) = offset;
-		*(vec.svec) = ndata_per_req;
+		vec.ovec[0] = offset;
+		vec.svec[0] = ndata_per_req;
 
 		RC_WRAP_LABEL(rc, out, dstore_dealloc_op, obj, &vec, &dop);
 
@@ -859,8 +873,8 @@ static int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count)
 	}
 
 	if (tail_size) {
-		*(vec.ovec) = offset;
-		*(vec.svec) = tail_size;
+		vec.ovec[0] = offset;
+		vec.svec[0] = ndata_per_req;
 
 		RC_WRAP_LABEL(rc, out, dstore_dealloc_op, obj, &vec, &dop);
 

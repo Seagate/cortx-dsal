@@ -204,7 +204,8 @@ struct dstore_io_vec {
 	struct dstore_io_buf edbuf;
 };
 
-static bool dstore_io_vec_flags_has_data(uint64_t flags) {
+static inline 
+bool dstore_io_vec_flags_has_data(uint64_t flags) {
 	return (flags & DSTORE_IVF_NO_IO_DATA) == 0;
 }
 
@@ -470,7 +471,6 @@ struct dstore_ops {
 
 	/* This function returns block size */
 	ssize_t (*obj_get_bsize) (dstore_oid_t *oid);
-
 };
 
 static inline

@@ -310,7 +310,22 @@ static void test_aligned_unaligned_io(void **state)
 	test_delete_file(env->dstore, &env->oid, 0);
 }
 
-static void test_resize_op(void **state)
+/*****************************************************************************/
+/* Description: Test file size decrement scenarios.
+ * Strategy:
+ * Create a new file.
+ * Open the new file.
+ * Execute different decrease file size test scenarios.
+ * Close the new file.
+ * Delete the new file.
+ * Expected behavior:
+ * No errors from the DSAL calls and data integrity
+ * check for read buffer should pass.
+ * Enviroment:
+ * Empty dstore.
+ */
+
+static void test_decrease_size_op(void **state)
 {
 	struct dstore_obj *obj = NULL;
 	struct env *env = ENV_FROM_STATE(state);
@@ -324,7 +339,15 @@ static void test_resize_op(void **state)
 	char *read_buf = NULL;
 	char *write_buf = NULL;
 
-	count = 4096;
+	/* TEST CASE 1 */
+
+	/* Write at offset 0, count = 3000 bytes.
+	 * decrease file size to 0.
+	 * This will test scenario where old file size is 
+	 * not aligned to block size.
+	 */
+
+	count = 3000;
 	offset = 0;
 	write_buf = calloc(count, sizeof(char));
 	memset(write_buf, 'A', count);
@@ -332,7 +355,7 @@ static void test_resize_op(void **state)
 	ut_assert_int_equal(rc, 0);
 	free(write_buf);
 
-	rc = dstore_obj_resize(obj, 4096, 3000);
+	rc = dstore_obj_resize(obj, 3000, 0);
 	ut_assert_int_equal(rc, 0);
 
 	count = 4096;
@@ -340,14 +363,19 @@ static void test_resize_op(void **state)
 	read_buf = calloc(bs, sizeof(char));
 	rc = dstore_pread(obj, offset, count, bs, read_buf);
 	ut_assert_int_equal(rc, 0);
-	rc = dtlib_verify_data_block(read_buf, 3000, 'A');
-	ut_assert_int_equal(rc, 0);
-	rc = dtlib_verify_data_block(read_buf+3000, 1096, 0);
+	rc = dtlib_verify_data_block(read_buf, 4096, 0);
 	ut_assert_int_equal(rc, 0);
 	free(read_buf);
 
-	count = 5192;
-	offset = 3000;
+	/* TEST CASE 2 */
+
+	/* Write at offset 0, count = 8192 bytes.
+	 * decrease file size to 4096.
+	 * This will test scenario where no alignment is required.
+	 */
+
+	count = 8192;
+	offset = 0;
 	write_buf = calloc(count, sizeof(char));
 	memset(write_buf, 'B', count);
 	rc = dstore_pwrite(obj, offset, count, bs, write_buf);
@@ -362,11 +390,40 @@ static void test_resize_op(void **state)
 	read_buf = calloc(count, sizeof(char));
 	rc = dstore_pread(obj, offset, count, bs, read_buf);
 	ut_assert_int_equal(rc, 0);
-	rc = dtlib_verify_data_block(read_buf, 3000, 'A');
-	ut_assert_int_equal(rc, 0);
-	rc = dtlib_verify_data_block(read_buf+3000, 1096, 'B');
+	rc = dtlib_verify_data_block(read_buf, 4096, 'B');
 	ut_assert_int_equal(rc, 0);
 	rc = dtlib_verify_data_block(read_buf+4096, 4096, 0);
+	ut_assert_int_equal(rc, 0);
+	free(read_buf);
+
+	/* TEST CASE 3 */
+
+	/* Write at offset 4096, count = 3096 bytes.
+	 * old file size is 7192, decrease file size to 3096.
+	 * This will test scenario where old file size is not
+	 * aligned to block size and new file size is also
+	 * not aligned to block size.
+	 */
+
+	count = 3096;
+	offset = 4096;
+	write_buf = calloc(count, sizeof(char));
+	memset(write_buf, 'C', count);
+	rc = dstore_pwrite(obj, offset, count, bs, write_buf);
+	ut_assert_int_equal(rc, 0);
+	free(write_buf);
+
+	rc = dstore_obj_resize(obj, 7192, 3096);
+	ut_assert_int_equal(rc, 0);
+
+	count = 8192;
+	offset = 0;
+	read_buf = calloc(count, sizeof(char));
+	rc = dstore_pread(obj, offset, count, bs, read_buf);
+	ut_assert_int_equal(rc, 0);
+	rc = dtlib_verify_data_block(read_buf, 3096, 'B');
+	ut_assert_int_equal(rc, 0);
+	rc = dtlib_verify_data_block(read_buf+3096, 5096, 0);
 	ut_assert_int_equal(rc, 0);
 	free(read_buf);
 
@@ -427,7 +484,7 @@ int main(int argc, char *argv[])
 
 	struct test_case test_group[] = {
 		ut_test_case(test_aligned_unaligned_io, NULL, NULL),
-		ut_test_case(test_resize_op, NULL, NULL),
+		ut_test_case(test_decrease_size_op, NULL, NULL),
 	};
 
 	int test_count =  sizeof(test_group)/sizeof(test_group[0]);
