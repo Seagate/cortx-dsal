@@ -736,7 +736,7 @@ out:
 	return rc;
 }
 
-int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
+static inline int __dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 		  size_t bs, char *buf)
 {
 	int rc = 0;
@@ -759,7 +759,25 @@ int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
 	return rc;
 }
 
-static int __dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
+int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
+		 size_t bs, char *buf)
+{
+	int rc;
+
+	perfc_trace_inii(PFT_DSTORE_PWRITE, PEM_DSTORE_TO_NFS);
+	perfc_trace_attr(PEA_DSTORE_PWRITE_OFFSET, offset);
+	perfc_trace_attr(PEA_DSTORE_PWRITE_COUNT, count);
+	perfc_trace_attr(PEA_DSTORE_BS, bs);
+
+	rc = __dstore_pwrite(obj, offset, count, bs, buf);
+
+	perfc_trace_attr(PEA_DSTORE_PWRITE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
+	return rc;
+}
+
+static inline int __dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
 			  size_t bs, char *buf)
 {
 	int rc = 0;
