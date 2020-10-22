@@ -217,6 +217,8 @@ out:
 		  OBJ_ID_P(dstore_obj_id(obj)), obj, old_size, new_size,
 		  rc);
 
+	perfc_trace_attr(PEA_DSTORE_OLD_SIZE, old_size);
+	perfc_trace_attr(PEA_DSTORE_NEW_SIZE, new_size);
 	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
 	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
 
@@ -250,6 +252,8 @@ out:
 		  OBJ_ID_P(dstore_obj_id(obj)), obj, old_size, new_size,
 		  rc);
 
+	perfc_trace_attr(PEA_DSTORE_OLD_SIZE, old_size);
+	perfc_trace_attr(PEA_DSTORE_NEW_SIZE, new_size);
 	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
 	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
 
