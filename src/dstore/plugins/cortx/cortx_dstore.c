@@ -334,7 +334,6 @@ void dstore_io_vec2bufext(struct dstore_io_vec *io_vec,
 			  struct cortx_io_bufext *bufext)
 {
 	M0_SET0(bufext);
-
 	bufext->data.ov_buf = (void **) io_vec->dbufs;
 	bufext->data.ov_vec.v_nr = io_vec->nr;
 	bufext->data.ov_vec.v_count = io_vec->svec;
@@ -388,6 +387,9 @@ static enum m0_obj_opcode
 		case DSTORE_IO_OP_READ:
 			obj_opcode = M0_OC_READ;
 			break;
+		case DSTORE_IO_OP_FREE:
+			obj_opcode = M0_OC_FREE;
+			break;
 		default:
 			/* Unsupported operation type */
 			dassert(0);
@@ -412,7 +414,7 @@ static int cortx_ds_io_op_init(struct dstore_obj *dobj,
 
 	perfc_trace_inii(PFT_DS_IO_INIT, PEM_DSAL_TO_MOTR);
 
-	if (!M0_IN(type, (DSTORE_IO_OP_WRITE, DSTORE_IO_OP_READ))) {
+	if (!M0_IN(type, (DSTORE_IO_OP_WRITE, DSTORE_IO_OP_READ, DSTORE_IO_OP_FREE))) {
 		log_err("%s", (char *) "Unsupported IO operation");
 		rc = RC_WRAP_SET(-EINVAL);
 		goto out;
@@ -430,17 +432,30 @@ static int cortx_ds_io_op_init(struct dstore_obj *dobj,
 
 	result->base.type = type;
 	result->base.obj = dobj;
+	result->base.cb = cb;
+	result->base.cb_ctx = cb_ctx;
 
-	dstore_io_vec_move(&result->base.data, bvec);
-
-	dstore_io_vec2bufext(&result->base.data, &result->vec);
-
-	perfc_trace_attr(PEA_TIME_ATTR_START_M0_OBJ_OP);
-
-	RC_WRAP_LABEL(rc, out, m0_obj_op, &obj->cobj,
-		      dstore_io_op_type2m0_op_type(type), &result->vec.extents,
-		      &result->vec.data,
-		      &result->attrs, empty_mask, empty_flag, &result->cop);
+	if (dstore_io_vec_flags_has_data(bvec->flags)) {
+		/* READ/WRITE Operation */
+		dstore_io_vec_move(&result->base.data, bvec);
+		dstore_io_vec2bufext(&result->base.data, &result->vec);
+		perfc_trace_attr(PEA_TIME_ATTR_START_M0_OBJ_OP);
+		RC_WRAP_LABEL(rc, out, m0_obj_op, &obj->cobj,
+			      dstore_io_op_type2m0_op_type(type), &result->vec.extents,
+			      &result->vec.data,
+			      &result->attrs, empty_mask, empty_flag, &result->cop);
+	}
+	else {
+		/* Free operation */
+		result->vec.extents.iv_vec.v_nr = bvec->nr;
+		result->vec.extents.iv_vec.v_count = bvec->svec;
+		result->vec.extents.iv_index = bvec->ovec;
+		perfc_trace_attr(PEA_TIME_ATTR_START_M0_OBJ_OP);
+		RC_WRAP_LABEL(rc, out, m0_obj_op, &obj->cobj,
+			      dstore_io_op_type2m0_op_type(type), &result->vec.extents,
+			      NULL, NULL,
+			      empty_mask, empty_flag, &result->cop);
+	}
 
 	perfc_trace_attr(PEA_TIME_ATTR_END_M0_OBJ_OP);
 	perfc_trace_attr(PEA_M0_OP_SM_ID, result->cop->op_sm.sm_id);
