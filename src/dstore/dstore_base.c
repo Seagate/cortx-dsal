@@ -64,6 +64,8 @@ int dstore_init(struct collection_item *cfg, int flags)
 
 	assert(dstore && cfg);
 
+	perfc_trace_inii(PFT_DSTORE_INIT, PEM_DSTORE_TO_NFS);
+
 	RC_WRAP(get_config_item, "dstore", "type", cfg, &item);
 	if (item == NULL) {
 		fprintf(stderr, "dstore type not specified\n");
@@ -90,6 +92,10 @@ int dstore_init(struct collection_item *cfg, int flags)
 
 	assert(dstore->dstore_ops->init != NULL);
 	rc = dstore->dstore_ops->init(cfg);
+
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
 	if (rc) {
 		return rc;
 	}
@@ -99,27 +105,51 @@ int dstore_init(struct collection_item *cfg, int flags)
 
 int dstore_fini(struct dstore *dstore)
 {
+	int rc;
 	assert(dstore && dstore->dstore_ops && dstore->dstore_ops->fini);
 
-	return dstore->dstore_ops->fini();
+	perfc_trace_inii(PFT_DSTORE_FINI, PEM_DSTORE_TO_NFS);
+
+	rc = dstore->dstore_ops->fini();
+
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
+	return rc;
 }
 
 int dstore_obj_create(struct dstore *dstore, void *ctx,
 		      dstore_oid_t *oid)
 {
+	int rc;
 	assert(dstore && dstore->dstore_ops && oid &&
 	       dstore->dstore_ops->obj_create);
 
-	return dstore->dstore_ops->obj_create(dstore, ctx, oid);
+	perfc_trace_inii(PFT_DSTORE_OBJ_CREATE, PEM_DSTORE_TO_NFS);
+
+	rc = dstore->dstore_ops->obj_create(dstore, ctx, oid);
+
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
+	return rc;
 }
 
 int dstore_obj_delete(struct dstore *dstore, void *ctx,
 		      dstore_oid_t *oid)
 {
+	int rc;
 	assert(dstore && dstore->dstore_ops && oid &&
 	       dstore->dstore_ops->obj_delete);
 
-	return dstore->dstore_ops->obj_delete(dstore, ctx, oid);
+	perfc_trace_inii(PFT_DSTORE_OBJ_DELETE, PEM_DSTORE_TO_NFS);
+
+	rc = dstore->dstore_ops->obj_delete(dstore, ctx, oid);
+
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
+	return rc;
 }
 
 static int dstore_obj_shrink(struct dstore_obj *obj,  size_t old_size,
@@ -128,6 +158,8 @@ static int dstore_obj_shrink(struct dstore_obj *obj,  size_t old_size,
 	int rc;
 	size_t count;
 	off_t offset;
+
+	perfc_trace_inii(PFT_DSTORE_OBJ_SHRINK, PEM_DSTORE_TO_NFS);
 
 	count = old_size - new_size;
 	offset = new_size;
@@ -139,12 +171,20 @@ out:
 		  "old_size = %lu new_size = %lu rc = %d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj, old_size, new_size,
 		  rc);
+
+	perfc_trace_attr(PEA_DSTORE_OLD_SIZE, old_size);
+	perfc_trace_attr(PEA_DSTORE_NEW_SIZE, new_size);
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
 	return rc;
 }
 
 int dstore_obj_resize(struct dstore_obj *obj, size_t old_size, size_t new_size)
 {
 	int rc = 0;
+
+	perfc_trace_inii(PFT_DSTORE_OBJ_RESIZE, PEM_DSTORE_TO_NFS);
 
 	/* Following code handle two cases
 	 * 1. If old and new size are same it's a noop hence no change
@@ -166,15 +206,29 @@ out:
 		  "old_size = %lu new_size = %lu rc = %d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj, old_size, new_size,
 		  rc);
+
+	perfc_trace_attr(PEA_DSTORE_OLD_SIZE, old_size);
+	perfc_trace_attr(PEA_DSTORE_NEW_SIZE, new_size);
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
 	return rc;
 }
 
 int dstore_get_new_objid(struct dstore *dstore, dstore_oid_t *oid)
 {
+	int rc;
 	assert(dstore && oid && dstore->dstore_ops &&
 	       dstore->dstore_ops->obj_get_id);
 
-	return dstore->dstore_ops->obj_get_id(dstore, oid);
+	perfc_trace_inii(PFT_DSTORE_GET_NEW_OBJID, PEM_DSTORE_TO_NFS);
+
+	rc = dstore->dstore_ops->obj_get_id(dstore, oid);
+
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
+	return rc;
 }
 
 int dstore_obj_open(struct dstore *dstore,
@@ -187,6 +241,8 @@ int dstore_obj_open(struct dstore *dstore,
 	dassert(dstore);
 	dassert(oid);
 	dassert(out);
+
+	perfc_trace_inii(PFT_DSTORE_OBJ_OPEN, PEM_DSTORE_TO_NFS);
 
 	RC_WRAP_LABEL(rc, out, dstore->dstore_ops->obj_open, dstore, oid,
 		      &result);
@@ -205,6 +261,10 @@ out:
 
 	log_debug("open " OBJ_ID_F ", %p, rc=%d", OBJ_ID_P(oid),
 		  rc == 0 ? *out : NULL, rc);
+
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
 	return rc;
 }
 
@@ -217,6 +277,8 @@ int dstore_obj_close(struct dstore_obj *obj)
 	dstore = obj->ds;
 	dassert(dstore);
 
+	perfc_trace_inii(PFT_DSTORE_OBJ_CLOSE, PEM_DSTORE_TO_NFS);
+
 	log_trace("close >>> " OBJ_ID_F ", %p",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj);
 
@@ -224,6 +286,10 @@ int dstore_obj_close(struct dstore_obj *obj)
 
 out:
 	log_trace("close <<< (%d)", rc);
+
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
 	return rc;
 }
 
@@ -242,10 +308,12 @@ static int dstore_io_op_init_and_submit(struct dstore_obj *obj,
 	dassert(out);
 	dassert(dstore_obj_invariant(obj));
 	dassert(dstore_io_vec_invariant(bvec));
-	/* Only WRITE/READ is supported so far */
+	/* Only WRITE/READ/FREE is supported so far */
 	dassert(op_type == DSTORE_IO_OP_WRITE ||
 		op_type == DSTORE_IO_OP_READ ||
 		op_type == DSTORE_IO_OP_FREE);
+
+	perfc_trace_inii(PFT_DSTORE_IO_OP_INIT_AND_SUBMIT, PEM_DSTORE_TO_NFS);
 
 	dstore = obj->ds;
 
@@ -261,6 +329,9 @@ out:
 		dstore->dstore_ops->io_op_fini(result);
 	}
 
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
 	dassert((!(*out)) || dstore_io_op_invariant(*out));
 	return rc;
 }
@@ -271,12 +342,17 @@ int dstore_io_op_write(struct dstore_obj *obj,
 {
 	int rc;
 
+	perfc_trace_inii(PFT_DSTORE_IO_OP_WRITE, PEM_DSTORE_TO_NFS);
+
 	rc = dstore_io_op_init_and_submit(obj, bvec, out, DSTORE_IO_OP_WRITE);
 
 	log_debug("write (" OBJ_ID_F " <=> %p, "
 		  "vec=%p, *out=%p) rc=%d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj,
 		  bvec, rc == 0 ? *out : NULL, rc);
+
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
 
 	return rc;
 }
@@ -286,12 +362,17 @@ int dstore_io_op_read(struct dstore_obj *obj, struct dstore_io_vec *bvec,
 {
 	int rc;
 
+	perfc_trace_inii(PFT_DSTORE_IO_OP_READ, PEM_DSTORE_TO_NFS);
+
 	rc = dstore_io_op_init_and_submit(obj, bvec, out, DSTORE_IO_OP_READ);
 
 	log_debug("read (" OBJ_ID_F " <=> %p, "
 		  "vec=%p, *out=%p) rc=%d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj,
 		  bvec, rc == 0 ? *out : NULL, rc);
+
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
 
 	return rc;
 }
@@ -306,6 +387,8 @@ int dstore_io_op_wait(struct dstore_io_op *op)
 	dassert(op->obj->ds);
 	dassert(dstore_io_op_invariant(op));
 
+	perfc_trace_inii(PFT_DSTORE_IO_OP_WAIT, PEM_DSTORE_TO_NFS);
+
 	dstore = op->obj->ds;
 
 	RC_WRAP_LABEL(rc, out, dstore->dstore_ops->io_op_wait, op);
@@ -313,6 +396,10 @@ int dstore_io_op_wait(struct dstore_io_op *op)
 out:
 	log_debug("wait (" OBJ_ID_F " <=> %p, op=%p) rc=%d",
 		  OBJ_ID_P(dstore_obj_id(op->obj)), op->obj, op, rc);
+
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
 	return rc;
 }
 
@@ -325,6 +412,8 @@ void dstore_io_op_fini(struct dstore_io_op *op)
 	dassert(op->obj->ds);
 	dassert(dstore_io_op_invariant(op));
 
+	perfc_trace_inii(PFT_DSTORE_IO_OP_FINI, PEM_DSTORE_TO_NFS);
+
 	dstore = op->obj->ds;
 
 	log_trace("fini >>> (" OBJ_ID_F " <=> %p, op=%p)",
@@ -333,6 +422,8 @@ void dstore_io_op_fini(struct dstore_io_op *op)
 	dstore->dstore_ops->io_op_fini(op);
 
 	log_trace("%s", (char *) "fini <<< ()");
+
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
 }
 
 static ssize_t __dstore_get_bsize(struct dstore *dstore, dstore_oid_t *oid)
