@@ -127,3 +127,6 @@ enum perfc_entity_maps {
 
 	PEM_END = PEMR_RANGE_3_END
 };
+
+/******************************************************************************/
+#endif /* CFS_PERF_COUNTERS_H_ */
