@@ -33,6 +33,7 @@
 #include "debug.h" /* dassert */
 #include "lib/vec.h" /* m0bufvec and m0indexvec */
 #include "operation.h"
+#include "../../../../cortxfs/src/include/addb/cfs_perfc.h"
 
 /** Private definition of DSTORE object for M0-based backend. */
 struct cortx_dstore_obj {

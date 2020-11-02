@@ -30,6 +30,7 @@
 #include "dstore_internal.h" /* import internal API definitions */
 #include "dstore_bufvec.h" /* data buffers and vectors */
 #include "operation.h"
+#include "../../../../cortxfs/src/include/addb/cfs_perfc.h"
 
 /* 20 MB is the max dealloc operation size that can be sent to motr code */
 #define DSAL_MAX_DEALLOC_OP_SIZE (20*1024*1024)
