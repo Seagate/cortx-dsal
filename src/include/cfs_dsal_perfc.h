@@ -1,5 +1,5 @@
 /*
- * Filename:	cfs_perfc.h
+ * Filename:	cfs_dsal_perfc.h
  * Description:	This module defines performance counters and helpers.
  *
  * Copyright (c) 2020 Seagate Technology LLC and/or its Affiliates
