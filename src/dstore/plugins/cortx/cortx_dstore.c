@@ -33,6 +33,7 @@
 #include "debug.h" /* dassert */
 #include "lib/vec.h" /* m0bufvec and m0indexvec */
 #include "operation.h"
+#include <cfs_dsal_perfc.h>
 
 /** Private definition of DSTORE object for M0-based backend. */
 struct cortx_dstore_obj {
@@ -458,8 +459,8 @@ static int cortx_ds_io_op_init(struct dstore_obj *dobj,
 	}
 
 	perfc_trace_attr(PEA_TIME_ATTR_END_M0_OBJ_OP);
-	perfc_trace_attr(PEA_M0_OP_SM_ID, result->cop->op_sm.sm_id);
-	perfc_trace_attr(PEA_M0_OP_SM_STATE, result->cop->op_sm.sm_state);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_ID, result->cop->op_sm.sm_id);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_STATE, result->cop->op_sm.sm_state);
 
 	result->cop->op_datum = result;
 	m0_op_setup(result->cop, &cortx_io_op_cbs, schedule_now);
@@ -486,13 +487,13 @@ static int cortx_ds_io_op_submit(struct dstore_io_op *dop)
 {
 	struct cortx_io_op *op = D2E_op(dop);
 	perfc_trace_inii(PFT_DS_IO_SUBMIT, PEM_DSAL_TO_MOTR);
-	perfc_trace_attr(PEA_TIME_ATTR_START_M0_OP_LAUNCH);
+	perfc_trace_attr(PEA_TIME_ATTR_START_DSAL_M0_OP_LAUNCH);
 
 	m0_op_launch(&op->cop, 1);
 
-	perfc_trace_attr(PEA_TIME_ATTR_END_M0_OP_LAUNCH);
-	perfc_trace_attr(PEA_M0_OP_SM_ID, op->cop->op_sm.sm_id);
-	perfc_trace_attr(PEA_M0_OP_SM_STATE, op->cop->op_sm.sm_state);
+	perfc_trace_attr(PEA_TIME_ATTR_END_DSAL_M0_OP_LAUNCH);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_ID, op->cop->op_sm.sm_id);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_STATE, op->cop->op_sm.sm_state);
 
 	log_debug("io_op_submit op=%p", op);
 	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
@@ -509,17 +510,17 @@ static int cortx_ds_io_op_wait(struct dstore_io_op *dop)
 
 	perfc_trace_inii(PFT_DS_IO_WAIT, PEM_DSAL_TO_MOTR);
 
-	perfc_trace_attr(PEA_TIME_ATTR_START_M0_OP_WAIT);
+	perfc_trace_attr(PEA_TIME_ATTR_START_DSAL_M0_OP_WAIT);
 	RC_WRAP_LABEL(rc, out, m0_op_wait, op->cop, wait_bits,
 		      time_limit);
-	perfc_trace_attr(PEA_TIME_ATTR_END_M0_OP_WAIT);
+	perfc_trace_attr(PEA_TIME_ATTR_END_DSAL_M0_OP_WAIT);
 
-	perfc_trace_attr(PEA_TIME_ATTR_START_M0_RC);
+	perfc_trace_attr(PEA_TIME_ATTR_START_DSAL_M0_RC);
 	RC_WRAP_LABEL(rc, out, m0_rc, op->cop);
-	perfc_trace_attr(PEA_TIME_ATTR_END_M0_RC);
+	perfc_trace_attr(PEA_TIME_ATTR_END_DSAL_M0_RC);
 
-	perfc_trace_attr(PEA_M0_OP_SM_ID, op->cop->op_sm.sm_id);
-	perfc_trace_attr(PEA_M0_OP_SM_STATE, op->cop->op_sm.sm_state);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_ID, op->cop->op_sm.sm_id);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_STATE, op->cop->op_sm.sm_state);
 
 out:
 	log_debug("io_op_wait op=%p, rc=%d", op, rc);
@@ -535,16 +536,16 @@ static void cortx_ds_io_op_fini(struct dstore_io_op *dop)
 
 	perfc_trace_inii(PFT_DS_IO_FINISH, PEM_DSAL_TO_MOTR);
 
-	perfc_trace_attr(PEA_M0_OP_SM_ID, op->cop->op_sm.sm_id);
-	perfc_trace_attr(PEA_M0_OP_SM_STATE, op->cop->op_sm.sm_state);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_ID, op->cop->op_sm.sm_id);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_STATE, op->cop->op_sm.sm_state);
 
-	perfc_trace_attr(PEA_TIME_ATTR_START_M0_OP_FINISH);
+	perfc_trace_attr(PEA_TIME_ATTR_START_DSAL_M0_OP_FINISH);
 	m0_op_fini(op->cop);
-	perfc_trace_attr(PEA_TIME_ATTR_END_M0_OP_FINISH);
+	perfc_trace_attr(PEA_TIME_ATTR_END_DSAL_M0_OP_FINISH);
 
-	perfc_trace_attr(PEA_TIME_ATTR_START_M0_OP_FREE);
+	perfc_trace_attr(PEA_TIME_ATTR_START_DSAL_M0_OP_FREE);
 	m0_op_free(op->cop);
-	perfc_trace_attr(PEA_TIME_ATTR_END_M0_OP_FREE);
+	perfc_trace_attr(PEA_TIME_ATTR_END_DSAL_M0_OP_FREE);
 
 	perfc_trace_attr(PEA_TIME_ATTR_START_M0_FREE);
 	m0_free(op);
