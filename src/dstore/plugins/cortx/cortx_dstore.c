@@ -32,6 +32,8 @@
 #include <assert.h> /* assert() */
 #include "debug.h" /* dassert */
 #include "lib/vec.h" /* m0bufvec and m0indexvec */
+#include "operation.h"
+#include <cfs_dsal_perfc.h>
 
 /** Private definition of DSTORE object for M0-based backend. */
 struct cortx_dstore_obj {
@@ -159,7 +161,13 @@ struct dstore_io_op *E2D_op(struct cortx_io_op *op)
 
 int cortx_ds_obj_get_id(struct dstore *dstore, dstore_oid_t *oid)
 {
-	return m0_ufid_get((struct m0_uint128 *)oid);
+	int rc;
+
+	perfc_trace_inii(PFT_DS_OBJ_GET_ID, PEM_DSAL_TO_MOTR);
+	rc = m0_ufid_get((struct m0_uint128 *)oid);
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+	return rc;
 }
 
 int cortx_ds_obj_create(struct dstore *dstore, void *ctx,
@@ -168,6 +176,8 @@ int cortx_ds_obj_create(struct dstore *dstore, void *ctx,
 	int rc;
 	struct m0_uint128 fid;
 
+	perfc_trace_inii(PFT_DS_OBJ_CREATE, PEM_DSAL_TO_MOTR);
+
 	assert(oid != NULL);
 	m0_fid_copy((struct m0_uint128 *)oid, &fid);
 
@@ -175,17 +185,26 @@ int cortx_ds_obj_create(struct dstore *dstore, void *ctx,
 
 out:
 	log_debug("ctx=%p fid = "U128X_F" rc=%d", ctx, U128_P(&fid), rc);
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
 	return rc;
 }
 
 int cortx_ds_init(struct collection_item *cfg_items)
 {
-	return m0init(cfg_items);
+	int rc;
+	perfc_trace_inii(PFT_DS_INIT, PEM_DSAL_TO_MOTR);
+	rc = m0init(cfg_items);
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+	return rc;
 }
 
 int cortx_ds_fini(void)
 {
+	perfc_trace_inii(PFT_DS_FINISH, PEM_DSAL_TO_MOTR);
 	m0fini();
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
 	return 0;
 }
 
@@ -194,12 +213,15 @@ int cortx_ds_obj_del(struct dstore *dstore, void *ctx, dstore_oid_t *oid)
 	struct m0_uint128 fid;
 	int rc;
 
+	perfc_trace_inii(PFT_DS_OBJ_DELETE, PEM_DSAL_TO_MOTR);
+
 	assert(oid != NULL);
 
 	m0_fid_copy((struct m0_uint128 *)oid, &fid);
 
 	/* Delete the object from backend store */
 	rc = m0store_delete_object(fid);
+
 	if (rc) {
 		if (rc == -ENOENT) {
 			log_warn("Non-existing obj, ctx=%p fid= "U128X_F" rc=%d",
@@ -213,6 +235,9 @@ int cortx_ds_obj_del(struct dstore *dstore, void *ctx, dstore_oid_t *oid)
 
 out:
 	log_debug("EXIT: ctx=%p fid= "U128X_F" rc=%d", ctx, U128_P(&fid), rc);
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
 	return rc;
 }
 
@@ -221,7 +246,12 @@ static int cortx_dstore_obj_alloc(struct cortx_dstore_obj **out)
 	int rc = 0;
 	struct cortx_dstore_obj *obj;
 
+	perfc_trace_inii(PFT_DS_OBJ_ALLOC, PEM_DSAL_TO_MOTR);
+
+	perfc_trace_attr(PEA_TIME_ATTR_START_M0_ALLOC_PTR);
 	M0_ALLOC_PTR(obj);
+	perfc_trace_attr(PEA_TIME_ATTR_END_M0_ALLOC_PTR);
+
 	if (!obj) {
 		rc = RC_WRAP_SET(-ENOMEM);
 		goto out;
@@ -230,12 +260,19 @@ static int cortx_dstore_obj_alloc(struct cortx_dstore_obj **out)
 	*out = obj;
 
 out:
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
 	return rc;
 }
 
 static void cortx_dstore_obj_free(struct cortx_dstore_obj *obj)
 {
+	perfc_trace_inii(PFT_DS_OBJ_FREE, PEM_DSAL_TO_MOTR);
+	perfc_trace_attr(PEA_TIME_ATTR_START_M0_FREE);
 	m0_free(obj);
+	perfc_trace_attr(PEA_TIME_ATTR_END_M0_FREE);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
 }
 
 static int cortx_ds_obj_open(struct dstore *dstore, const obj_id_t *oid,
@@ -243,6 +280,8 @@ static int cortx_ds_obj_open(struct dstore *dstore, const obj_id_t *oid,
 {
 	int rc;
 	struct cortx_dstore_obj *obj = NULL;
+
+	perfc_trace_inii(PFT_DS_OBJ_OPEN, PEM_DSAL_TO_MOTR);
 
 	RC_WRAP_LABEL(rc, out, cortx_dstore_obj_alloc, &obj);
 
@@ -253,6 +292,8 @@ static int cortx_ds_obj_open(struct dstore *dstore, const obj_id_t *oid,
 
 out:
 	cortx_dstore_obj_free(obj);
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
 	return rc;
 }
 
@@ -260,12 +301,16 @@ static int cortx_ds_obj_close(struct dstore_obj *dobj)
 {
 	struct cortx_dstore_obj *obj = D2E_obj(dobj);
 
+	perfc_trace_inii(PFT_DS_OBJ_CLOSE, PEM_DSAL_TO_MOTR);
+
 	dassert(obj);
 	dassert(obj->base.ds);
 
 	m0store_obj_close(&obj->cobj);
+
 	cortx_dstore_obj_free(obj);
 
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
 	/* XXX:
 	 * Right now, we assume that M0-based backend
 	 * cannot fail here. However, later on
@@ -290,7 +335,6 @@ void dstore_io_vec2bufext(struct dstore_io_vec *io_vec,
 			  struct cortx_io_bufext *bufext)
 {
 	M0_SET0(bufext);
-
 	bufext->data.ov_buf = (void **) io_vec->dbufs;
 	bufext->data.ov_vec.v_nr = io_vec->nr;
 	bufext->data.ov_vec.v_count = io_vec->svec;
@@ -344,6 +388,9 @@ static enum m0_obj_opcode
 		case DSTORE_IO_OP_READ:
 			obj_opcode = M0_OC_READ;
 			break;
+		case DSTORE_IO_OP_FREE:
+			obj_opcode = M0_OC_FREE;
+			break;
 		default:
 			/* Unsupported operation type */
 			dassert(0);
@@ -366,7 +413,9 @@ static int cortx_ds_io_op_init(struct dstore_obj *dobj,
 	const uint64_t empty_mask = 0;
 	const uint64_t empty_flag = 0;
 
-	if (!M0_IN(type, (DSTORE_IO_OP_WRITE, DSTORE_IO_OP_READ))) {
+	perfc_trace_inii(PFT_DS_IO_INIT, PEM_DSAL_TO_MOTR);
+
+	if (!M0_IN(type, (DSTORE_IO_OP_WRITE, DSTORE_IO_OP_READ, DSTORE_IO_OP_FREE))) {
 		log_err("%s", (char *) "Unsupported IO operation");
 		rc = RC_WRAP_SET(-EINVAL);
 		goto out;
@@ -384,15 +433,34 @@ static int cortx_ds_io_op_init(struct dstore_obj *dobj,
 
 	result->base.type = type;
 	result->base.obj = dobj;
+	result->base.cb = cb;
+	result->base.cb_ctx = cb_ctx;
 
-	dstore_io_vec_move(&result->base.data, bvec);
+	if (dstore_io_vec_flags_has_data(bvec->flags)) {
+		/* READ/WRITE Operation */
+		dstore_io_vec_move(&result->base.data, bvec);
+		dstore_io_vec2bufext(&result->base.data, &result->vec);
+		perfc_trace_attr(PEA_TIME_ATTR_START_M0_OBJ_OP);
+		RC_WRAP_LABEL(rc, out, m0_obj_op, &obj->cobj,
+			      dstore_io_op_type2m0_op_type(type), &result->vec.extents,
+			      &result->vec.data,
+			      &result->attrs, empty_mask, empty_flag, &result->cop);
+	}
+	else {
+		/* Free operation */
+		result->vec.extents.iv_vec.v_nr = bvec->nr;
+		result->vec.extents.iv_vec.v_count = bvec->svec;
+		result->vec.extents.iv_index = bvec->ovec;
+		perfc_trace_attr(PEA_TIME_ATTR_START_M0_OBJ_OP);
+		RC_WRAP_LABEL(rc, out, m0_obj_op, &obj->cobj,
+			      dstore_io_op_type2m0_op_type(type), &result->vec.extents,
+			      NULL, NULL,
+			      empty_mask, empty_flag, &result->cop);
+	}
 
-	dstore_io_vec2bufext(&result->base.data, &result->vec);
-
-	RC_WRAP_LABEL(rc, out, m0_obj_op, &obj->cobj,
-		      dstore_io_op_type2m0_op_type(type), &result->vec.extents,
-		      &result->vec.data,
-		      &result->attrs, empty_mask, empty_flag, &result->cop);
+	perfc_trace_attr(PEA_TIME_ATTR_END_M0_OBJ_OP);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_ID, result->cop->op_sm.sm_id);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_STATE, result->cop->op_sm.sm_state);
 
 	result->cop->op_datum = result;
 	m0_op_setup(result->cop, &cortx_io_op_cbs, schedule_now);
@@ -408,6 +476,9 @@ out:
 	log_debug("io_op_init obj=%p, nr=%d, op=%p rc=%d", obj, (int) bvec->nr,
 		  rc == 0 ? *out : NULL, rc);
 
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
 	dassert((!(*out)) || dstore_io_op_invariant(*out));
 	return rc;
 }
@@ -415,8 +486,17 @@ out:
 static int cortx_ds_io_op_submit(struct dstore_io_op *dop)
 {
 	struct cortx_io_op *op = D2E_op(dop);
+	perfc_trace_inii(PFT_DS_IO_SUBMIT, PEM_DSAL_TO_MOTR);
+	perfc_trace_attr(PEA_TIME_ATTR_START_DSAL_M0_OP_LAUNCH);
+
 	m0_op_launch(&op->cop, 1);
+
+	perfc_trace_attr(PEA_TIME_ATTR_END_DSAL_M0_OP_LAUNCH);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_ID, op->cop->op_sm.sm_id);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_STATE, op->cop->op_sm.sm_state);
+
 	log_debug("io_op_submit op=%p", op);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
 	return 0; /* M0 launch is safe */
 }
 
@@ -428,12 +508,25 @@ static int cortx_ds_io_op_wait(struct dstore_io_op *dop)
 					   M0_OS_STABLE);
 	const m0_time_t time_limit = M0_TIME_NEVER;
 
+	perfc_trace_inii(PFT_DS_IO_WAIT, PEM_DSAL_TO_MOTR);
+
+	perfc_trace_attr(PEA_TIME_ATTR_START_DSAL_M0_OP_WAIT);
 	RC_WRAP_LABEL(rc, out, m0_op_wait, op->cop, wait_bits,
 		      time_limit);
+	perfc_trace_attr(PEA_TIME_ATTR_END_DSAL_M0_OP_WAIT);
+
+	perfc_trace_attr(PEA_TIME_ATTR_START_DSAL_M0_RC);
 	RC_WRAP_LABEL(rc, out, m0_rc, op->cop);
+	perfc_trace_attr(PEA_TIME_ATTR_END_DSAL_M0_RC);
+
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_ID, op->cop->op_sm.sm_id);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_STATE, op->cop->op_sm.sm_state);
 
 out:
 	log_debug("io_op_wait op=%p, rc=%d", op, rc);
+	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
 	return rc;
 }
 
@@ -441,9 +534,24 @@ static void cortx_ds_io_op_fini(struct dstore_io_op *dop)
 {
 	struct cortx_io_op *op = D2E_op(dop);
 
+	perfc_trace_inii(PFT_DS_IO_FINISH, PEM_DSAL_TO_MOTR);
+
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_ID, op->cop->op_sm.sm_id);
+	perfc_trace_attr(PEA_M0_OP_DSAL_SM_STATE, op->cop->op_sm.sm_state);
+
+	perfc_trace_attr(PEA_TIME_ATTR_START_DSAL_M0_OP_FINISH);
 	m0_op_fini(op->cop);
+	perfc_trace_attr(PEA_TIME_ATTR_END_DSAL_M0_OP_FINISH);
+
+	perfc_trace_attr(PEA_TIME_ATTR_START_DSAL_M0_OP_FREE);
 	m0_op_free(op->cop);
+	perfc_trace_attr(PEA_TIME_ATTR_END_DSAL_M0_OP_FREE);
+
+	perfc_trace_attr(PEA_TIME_ATTR_START_M0_FREE);
 	m0_free(op);
+	perfc_trace_attr(PEA_TIME_ATTR_END_M0_FREE);
+
+	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
 }
 
 ssize_t cortx_ds_obj_get_bsize(dstore_oid_t *oid)
