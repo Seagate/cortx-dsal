@@ -45,6 +45,9 @@ Provides: %{name} = %{version}-%{release}
 @BCOND_ENABLE_DASSERT@ enable_dassert
 %global enable_dassert %{on_off_switch enable_dassert}
 
+@BCOND_ENABLE_TSDB_ADDB@ enable_tsdb_addb
+%global enable_tsdb_addb %{on_off_switch enable_tsdb_addb}
+
 %description
 The @PROJECT_NAME@ is Data Store Abstraction Layer library.
 
@@ -68,6 +71,7 @@ cmake . -DUSE_POSIX_STORE=%{use_posix_store}     \
 	-DCORTXUTILSINC:PATH="@CORTXUTILSINC@"         \
 	-DLIBCORTXUTILS:PATH="@LIBCORTXUTILS@"	\
 	-DENABLE_DASSERT=%{enable_dassert}	\
+	-DENABLE_TSDB_ADDB=%{enable_tsdb_addb}	\
 	-DPROJECT_NAME_BASE=@PROJECT_NAME_BASE@
 
 make %{?_smp_mflags} || make %{?_smp_mflags} || make
