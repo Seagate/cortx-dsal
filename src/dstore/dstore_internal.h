@@ -468,9 +468,6 @@ struct dstore_ops {
 	 * (free(NULL) is noop).
 	 */
 	void (*free_buf)(struct dstore *, void *);
-
-	/* This function returns block size */
-	ssize_t (*obj_get_bsize) (dstore_oid_t *oid);
 };
 
 static inline
@@ -491,7 +488,6 @@ bool dstore_ops_invariant(const struct dstore_ops *ops)
 		ops->io_op_init &&
 		ops->io_op_submit &&
 		ops->io_op_wait &&
-		ops->obj_get_bsize &&
 
 		/* AllocBuf/FreeBuf interfaces are not in use right now. */
 #if 0

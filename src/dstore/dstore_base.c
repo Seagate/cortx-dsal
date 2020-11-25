@@ -52,7 +52,8 @@ static struct dstore_module dstore_modules[] = {
 	{ NULL, NULL },
 };
 
-static int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count);
+static int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count,
+			     size_t bsize);
 
 int dstore_init(struct collection_item *cfg, int flags)
 {
@@ -154,7 +155,7 @@ int dstore_obj_delete(struct dstore *dstore, void *ctx,
 }
 
 static int dstore_obj_shrink(struct dstore_obj *obj,  size_t old_size,
-			     size_t new_size)
+			     size_t new_size, size_t bsize)
 {
 	int rc;
 	size_t count;
@@ -165,7 +166,7 @@ static int dstore_obj_shrink(struct dstore_obj *obj,  size_t old_size,
 	count = old_size - new_size;
 	offset = new_size;
 
-	RC_WRAP_LABEL(rc, out, dstore_deallocate, obj, offset, count);
+	RC_WRAP_LABEL(rc, out, dstore_deallocate, obj, offset, count, bsize);
 
 out:
 	log_trace(OBJ_ID_F " <=> %p "
@@ -181,7 +182,8 @@ out:
 	return rc;
 }
 
-int dstore_obj_resize(struct dstore_obj *obj, size_t old_size, size_t new_size)
+int dstore_obj_resize(struct dstore_obj *obj, size_t old_size, size_t new_size,
+		      size_t bsize)
 {
 	int rc = 0;
 
@@ -194,19 +196,19 @@ int dstore_obj_resize(struct dstore_obj *obj, size_t old_size, size_t new_size)
 	 */
 	if (old_size <= new_size) {
 		log_trace("dstore_obj_resize:(" OBJ_ID_F " <=> %p )"
-			  "old_size = %lu new_size = %lu rc = %d",
+			  "old_size = %lu new_size = %lu bsize = %lu rc = %d",
 			  OBJ_ID_P(dstore_obj_id(obj)), obj, old_size, new_size,
-			  rc);
+			  bsize, rc);
 		goto out;
 	}
 
 	/* Shrink operation */
-	RC_WRAP_LABEL(rc, out, dstore_obj_shrink, obj, old_size, new_size);
+	RC_WRAP_LABEL(rc, out, dstore_obj_shrink, obj, old_size, new_size, bsize);
 out:
 	log_trace("dstore_obj_resize:(" OBJ_ID_F " <=> %p )"
-		  "old_size = %lu new_size = %lu rc = %d",
+		  "old_size = %lu new_size = %lu bsize = %lu rc = %d",
 		  OBJ_ID_P(dstore_obj_id(obj)), obj, old_size, new_size,
-		  rc);
+		  bsize, rc);
 
 	perfc_trace_attr(PEA_DSTORE_OLD_SIZE, old_size);
 	perfc_trace_attr(PEA_DSTORE_NEW_SIZE, new_size);
@@ -425,29 +427,6 @@ void dstore_io_op_fini(struct dstore_io_op *op)
 	log_trace("%s", (char *) "fini <<< ()");
 
 	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
-}
-
-static ssize_t __dstore_get_bsize(struct dstore *dstore, dstore_oid_t *oid)
-{
-	dassert(dstore && oid);
-	dassert(dstore_invariant(dstore));
-
-	return dstore->dstore_ops->obj_get_bsize(oid);
-}
-
-
-ssize_t dstore_get_bsize(struct dstore *dstore, dstore_oid_t *oid)
-{
-	size_t rc;
-
-	perfc_trace_inii(PFT_DSTORE_GET, PEM_DSTORE_TO_NFS);
-
-	rc = __dstore_get_bsize(dstore, oid);
-
-	perfc_trace_attr(PEA_DSTORE_GET_RES_RC, rc);
-	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
-
-	return rc;
 }
 
 static int pwrite_aligned(struct dstore_obj *obj, char *write_buf,
@@ -882,7 +861,8 @@ static int dstore_dealloc_op(struct dstore_obj *obj, struct dstore_io_vec *vec,
 	return rc;
 }
 
-static int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count)
+static int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count,
+			     size_t bsize)
 {
 	int rc = 0;
 	char *tmp_buf = NULL;
@@ -893,7 +873,6 @@ static int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count)
 	size_t tail_size;
 	int i;
 	size_t old_size;
-	size_t bsize;
 	uint32_t left_blk_num;
 	uint32_t write_count;
 	/* For tracing purpose */
@@ -901,9 +880,6 @@ static int dstore_deallocate(struct dstore_obj *obj, off_t offset, size_t count)
 	size_t size = count;
 
 	dassert(obj);
-
-	bsize = dstore_get_bsize(obj->ds,
-				 (dstore_oid_t *) dstore_obj_id(obj));
 
 	/* calculate count again so as to make dealloc operation bsize aligned.
 	 * Example: if bsize is 4096 and file size is 3000, truncate to 0.
