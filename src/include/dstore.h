@@ -108,9 +108,11 @@ int dstore_obj_write(struct dstore *dstore, void *ctx,
  * @paramp[in] obj - An open object.
  * @paramp[in] old_size - Current size of given object
  * @paramp[in] new_size - New size of a given object after performing this op
+ * @paramp[in] bsize - Block size of the associated file system
  * @return 0 on success -errno given by backend operation
  */
-int dstore_obj_resize(struct dstore_obj *obj, size_t old_size, size_t new_size);
+int dstore_obj_resize(struct dstore_obj *obj, size_t old_size, size_t new_size,
+		      size_t bsize);
 
 int dstore_get_new_objid(struct dstore *dstore, dstore_oid_t *oid);
 
@@ -146,9 +148,6 @@ typedef void (*dstore_io_op_cb_t)(void *cb_ctx,
 				  int op_rc);
 
 struct dstore *dstore_get(void);
-
-/* This api returns the block size from motr */
-ssize_t dstore_get_bsize(struct dstore *dstore, dstore_oid_t *oid);
 
 /** This API based on input decides whether the givevn request is aligned or not
  * If it is aligned request it will directly write the requested amount of data

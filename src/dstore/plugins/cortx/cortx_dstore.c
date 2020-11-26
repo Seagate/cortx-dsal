@@ -554,16 +554,6 @@ static void cortx_ds_io_op_fini(struct dstore_io_op *dop)
 	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
 }
 
-ssize_t cortx_ds_obj_get_bsize(dstore_oid_t *oid)
-{
-	ssize_t bsize;
-	struct m0_uint128 fid;
-	m0_fid_copy((struct m0_uint128 *)oid, &fid);
-	bsize = m0store_get_bsize(fid);
-	log_debug("cortx_ds_obj_get_bsize bsize %lu", bsize);
-	return bsize;
-}
-
 const struct dstore_ops cortx_dstore_ops = {
 	.init = cortx_ds_init,
 	.fini = cortx_ds_fini,
@@ -576,5 +566,4 @@ const struct dstore_ops cortx_dstore_ops = {
 	.io_op_submit = cortx_ds_io_op_submit,
 	.io_op_wait = cortx_ds_io_op_wait,
 	.io_op_fini = cortx_ds_io_op_fini,
-	.obj_get_bsize = cortx_ds_obj_get_bsize,
 };

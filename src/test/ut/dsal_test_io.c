@@ -355,7 +355,7 @@ static void test_decrease_size_op(void **state)
 	ut_assert_int_equal(rc, 0);
 	free(write_buf);
 
-	rc = dstore_obj_resize(obj, 3000, 0);
+	rc = dstore_obj_resize(obj, 3000, 0, bs);
 	ut_assert_int_equal(rc, 0);
 
 	count = 4096;
@@ -382,7 +382,7 @@ static void test_decrease_size_op(void **state)
 	ut_assert_int_equal(rc, 0);
 	free(write_buf);
 
-	rc = dstore_obj_resize(obj, 8192, 4096);
+	rc = dstore_obj_resize(obj, 8192, 4096, bs);
 	ut_assert_int_equal(rc, 0);
 
 	count = 8192;
@@ -413,7 +413,7 @@ static void test_decrease_size_op(void **state)
 	ut_assert_int_equal(rc, 0);
 	free(write_buf);
 
-	rc = dstore_obj_resize(obj, 7192, 3096);
+	rc = dstore_obj_resize(obj, 7192, 3096, bs);
 	ut_assert_int_equal(rc, 0);
 
 	count = 8192;

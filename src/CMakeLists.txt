@@ -18,13 +18,6 @@ set(LIBCORTXUTILS ${DEFAULT_LIBCORTXUTILS} CACHE PATH "Path to folder with libco
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I\"${CMAKE_SOURCE_DIR}/include\"")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror -fPIC -g")
 
-# Turns on ADDB-based TDSB wrappers.
-# When this flag is disabled, perfc TSDB code will be turned off
-# When this flag is enabled, the utils module has to be
-# compiled with this flag enabled otherwise some of
-# the function calls will be undefined.
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_TSDB_ADDB")
-
 set(CORTX_DSAL_BASE_VERSION ${BASE_VERSION})
 set(CORTX_NSAL_BASE_VERSION ${BASE_VERSION})
 
@@ -85,6 +78,19 @@ else (ENABLE_DASSERT)
 endif (ENABLE_DASSERT)
 
 message( STATUS "ENABLE_DASSERT : ${ENABLE_DASSERT}")
+
+# Option (To enable/disable ENABLE_TSDB_ADDB mode.)
+option(ENABLE_TSDB_ADDB "Enable ENABLE_TSDB_ADDB mode." OFF)
+
+if (ENABLE_TSDB_ADDB)
+	set(BCOND_ENABLE_TSDB_ADDB "%bcond_without")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_TSDB_ADDB")
+else (ENABLE_TSDB_ADDB)
+	set(BCOND_ENABLE_TSDB_ADDB "%bcond_with")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+endif (ENABLE_TSDB_ADDB)
+
+message( STATUS "ENABLE_TSDB_ADDB : ${ENABLE_TSDB_ADDB}" )
 
 ## Check ini_config
 check_include_files("ini_config.h" HAVE_INI_CONFIG_H)
