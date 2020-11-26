@@ -27,6 +27,7 @@
 #include <errno.h> /* errno values */
 #include "../dstore/dstore_internal.h"
 #include "debug.h" /* dassert */
+#include "common/log.h" /* log_* */
 
 int dstore_io_buf_init(void *data, size_t size, size_t offset,
 		      struct dstore_io_buf **buf)
@@ -92,6 +93,7 @@ int dstore_io_buf2vec(struct dstore_io_buf **buf, struct dstore_io_vec **vec)
 	dstore_io_vec_set_from_edbuf(result);
 	*vec = result;
 
+	log_test("************************* DSAL **************************** \n");
 out:
 	dassert((!(*vec)) || (*buf == NULL && dstore_io_vec_invariant(*vec)));
 	return rc;
