@@ -25,6 +25,9 @@
 #include "dstore.h" /* dstore operations to be tested */
 #include "dstore_bufvec.h" /* data buffers and vectors */
 #include "dsal_test_lib.h" /* DSAL-specific helpers for tests */
+#include <m0log.h>
+
+extern const int dsal_magic_symbol;
 
 /*****************************************************************************/
 /** Test environment for the test group.
@@ -466,6 +469,13 @@ int main(int argc, char *argv[])
 	char *test_logs = "/var/log/cortx/test/ut/ut_dsal.logs";
 
 	printf("Dsal IO test\n");
+
+	if (argc > 1 && strcmp(argv[1], "decode") == 0)
+        {
+                rc = decoder((const void*)&dsal_magic_symbol, argv[2], argv[3]);
+                return rc;
+        }
+
 
 	rc = ut_load_config(CONF_FILE);
 	if (rc != 0) {

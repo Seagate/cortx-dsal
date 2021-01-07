@@ -31,10 +31,12 @@
 #include "dstore_bufvec.h" /* data buffers and vectors */
 #include "operation.h"
 #include <cfs_dsal_perfc.h>
+#include <m0log.h>
 
 /* 20 MB is the max dealloc operation size that can be sent to motr code */
 #define DSAL_MAX_DEALLOC_OP_SIZE (20*1024*1024)
 
+const int dsal_magic_symbol = 2812;
 static struct dstore g_dstore;
 
 struct dstore *dstore_get(void)
@@ -133,6 +135,8 @@ int dstore_obj_create(struct dstore *dstore, void *ctx,
 
 	perfc_trace_attr(PEA_DSTORE_RES_RC, rc);
 	perfc_trace_finii(PERFC_TLS_POP_DONT_VERIFY);
+
+	log_err("DSAL DSAL DSAL \n");
 
 	return rc;
 }
@@ -969,3 +973,13 @@ out:
 	return rc;
 }
 
+int dsal_register_magic_symbol(void)
+{
+	int rc = 0;
+	rc = m0log_add_magic_sym((const void*)&dsal_magic_symbol);
+	if (rc) {
+		log_err("adding magic symbol failed at dsal, rc=%d", rc);
+	}
+
+	return rc;
+}
