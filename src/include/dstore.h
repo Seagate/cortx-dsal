@@ -181,4 +181,7 @@ int dstore_pwrite(struct dstore_obj *obj, off_t offset, size_t count,
  */
 int dstore_pread(struct dstore_obj *obj, off_t offset, size_t count,
 		       size_t bs, char *buf);
+
+int dsal_register_magic_symbol(void);
+
 #endif
