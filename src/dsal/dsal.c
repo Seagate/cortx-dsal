@@ -19,6 +19,8 @@
 
 #include "dsal.h"  /* header for dsal_init/dsal_fini */
 #include <debug.h> /* dassert */
+#include <m0log.h>
+const int  m0trace_common4 = 2814;
 
 static int dsal_initialized;
 
@@ -26,6 +28,10 @@ int dsal_init(struct collection_item *cfg, int flags)
 {
 	dassert(dsal_initialized == 0);
 	dsal_initialized++;
+
+	test_m0log_setup();
+	test_m0log_common1_setup((const void*)&m0trace_common4);
+
 	return dstore_init(cfg, flags);
 }
 
@@ -33,6 +39,9 @@ int dsal_fini(void)
 {
 	struct dstore *dstor = dstore_get();
         dassert(dstor != NULL);
+
+	m0log_fini();
+
 	return dstore_fini(dstor);
 }
 
